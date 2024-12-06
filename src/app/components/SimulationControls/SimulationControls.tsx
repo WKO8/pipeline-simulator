@@ -1,6 +1,6 @@
 "use client";
 import { usePipelineContext } from "@/contexts/PipelineContext";
-import type { Instruction } from "@/contexts/PipelineContext";
+import type { Instruction } from "@/types/PipelineTypes";
 
 export const SimulationControls = () => {
     const { 

@@ -1,4 +1,4 @@
-import type { Instruction } from '../contexts/PipelineContext';
+import type { Instruction } from './PipelineTypes';
 
 export interface ThreadContext {
     id: number;
