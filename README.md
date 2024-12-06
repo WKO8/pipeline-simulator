@@ -1,36 +1,81 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Pipeline Simulator
 
-## Getting Started
+A RISC-V pipeline simulator that supports scalar and superscalar architectures with multithreading capabilities (IMT, SMT, BMT).
 
-First, run the development server:
+## Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+### Pipeline Types
+- Scalar Pipeline
+- Superscalar Pipeline (Multiple instruction issue)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Multithreading Support
+- IMT (Interleaved Multithreading)
+- SMT (Simultaneous Multithreading)
+- BMT (Block Multithreading)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Hazard Handling
+- Data Dependencies
+- Resource Conflicts
+- Structural Hazards
+- Data Forwarding Support
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Resource Units
+- ALU1 & ALU2 (Arithmetic Logic Units)
+- LSU (Load/Store Unit)
+- BRU (Branch Unit)
 
-## Learn More
+### Performance Metrics
+- Total Cycles
+- Completed Instructions
+- Stall Cycles
+- Bubble Cycles
+- Resource Utilization
+- IPC (Instructions Per Cycle)
 
-To learn more about Next.js, take a look at the following resources:
+## Instructions Supported
+- Arithmetic: ADD, SUB, MUL, DIV
+- Memory: LW, SW
+- Branch: BEQ, BNE, BLT, BGE, JAL
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Pipeline Stages
+1. IF (Instruction Fetch)
+2. DE (Decode)
+3. EX (Execute)
+4. MEM (Memory)
+5. WB (Write Back)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Usage
 
-## Deploy on Vercel
+### Running the Simulator
+1. Select pipeline type (Scalar/Superscalar)
+2. Choose threading mode (None/IMT/SMT/BMT)
+3. Enable/Disable forwarding
+4. Generate instructions
+5. Control execution with Start/Pause/Continue/Reset buttons
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Visualization
+- Real-time pipeline stage visualization
+- Performance metrics display
+- Resource utilization tracking
+- Thread state monitoring
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Technical Details
+
+### Superscalar Limits
+- IF: 4 instructions
+- DE: 4 instructions
+- EX: 2 instructions
+- MEM: 2 instructions
+- WB: 4 instructions
+
+### Instruction Latencies
+- Basic ALU: 1 cycle
+- MUL/DIV: 4 cycles
+- Load/Store: 3 cycles
+- Branch: 2 cycles
+
+## Implementation
+Built with:
+- React
+- TypeScript
+- Context API for state management
