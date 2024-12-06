@@ -9,6 +9,7 @@ import GridEscalar from "../GridEscalar/GridEscalar";
 import GridSuperescalar from "../GridSuperescalar/GridSuperescalar";
 import PerformanceLog from "../PerformanceLog/PerformanceLog";
 import { usePipelineContext } from "@/contexts/PipelineContext";
+import ReadyInstructionsVisualizer from "../ReadyInstructionsVisualizer/ReadyInstructionsVisualizer";
 // import { SimulationControls } from "../SimulationControls/SimulationControls";
 // import { ThreadVisualizer } from "../ThreadVisualizer/ThreadVisualizer";
 
@@ -184,7 +185,9 @@ const Layout = () => {
         {/* PerformanceLog */}
         <PerformanceLog />
       </div>
-
+      
+      {/* Ready Instructions Visualizer */}
+      <ReadyInstructionsVisualizer />
 
       {/* Thread Visualization */}
       {/* <SimulationControls /> */}

@@ -1,0 +1,18 @@
+.container {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 5%;
+    gap: 5%;
+    width: 100%;
+    height: 100%;
+    padding: 16px;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+.instructions {
+    width: 100vw;
+    height: 100vh;
+    background-color: #444444;
+}
