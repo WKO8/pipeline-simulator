@@ -1,0 +1,54 @@
+.container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+    height: 100%;
+    justify-content: start;
+    align-items: start;
+    
+    text-align: center;
+    text-align: start;
+
+    padding: 1rem;
+
+    background-color: #444444;
+    color: white;
+    border-radius: 8px;
+    box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1);
+
+    overflow-y: auto;
+}
+
+.logItems {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+    height: 22rem;
+    padding-right: 1rem;
+    overflow-y: auto;
+}
+
+.bottomBar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    margin-bottom: 1rem;
+    width: 100%;
+}
+
+.actionButton {
+    background-color: #302a2a;
+    color: white;
+    font-weight: bold;
+}
+
+.actionButton:hover {
+    background-color: #9c8888;
+}

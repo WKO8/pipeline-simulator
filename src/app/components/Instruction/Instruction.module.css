@@ -1,0 +1,21 @@
+.instruction {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 60%;
+    height: 20%;
+    background-color: #2e2525;
+    border-radius: 8px;
+    box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.superescalar {
+    width: 40%;
+    height: 8%;
+}
+
+.dependencies {
+    font-size: 0.8em;
+    color: white;
+    margin-top: 4px;
+}

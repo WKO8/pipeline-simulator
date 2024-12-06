@@ -1,0 +1,80 @@
+/* Layout.module.css */
+
+.container {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 5%;
+    width: 100%;
+    height: 100%;
+    padding: 16px;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+.simulator {
+    width: 70%;
+}
+
+.performance {
+    width: 25%;
+    justify-content: center;
+}
+  
+.topBar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    text-align: center;
+    background-color: #444444;
+    padding: 8px 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.optionsLeft {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    flex: 1;
+}
+
+.searchBar {
+    flex: 2;
+    display: flex;
+    justify-content: center;
+}
+
+.actions {
+    flex: 1;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.bottomBar {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    background-color: #444444;
+    padding: 8px 16px;
+    border-radius: 8px;
+    margin-top: 16px;
+    box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.actionButtons {
+    display: flex;
+    flex-direction: row;
+    gap: 1rem;
+}
+
+.actionButton {
+    background-color: #302a2a;
+    color: white;
+    font-weight: bold;
+}
+
+.actionButton:hover {
+    background-color: #9c8888;
+}
