@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { LogProvider } from "@/contexts/LogContext";
 import { PipelineProvider } from "@/contexts/PipelineContext";
+import { ForwardingProvider } from "@/contexts/ForwardingContext";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -30,11 +31,13 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+      <ForwardingProvider>
         <LogProvider>
           <PipelineProvider>
-            {children}
+              {children}
           </PipelineProvider>
         </LogProvider>
+      </ForwardingProvider>
       </body>
     </html>
   );

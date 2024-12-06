@@ -1,21 +1,22 @@
 import { Instruction } from '../types/PipelineTypes';
 
-export function detectDependencies(newInst: Instruction, activeInstructions: Instruction[]): string[] {
+export function detectDependencies(newInst: Instruction, activeInstructions: Instruction[], forwardingEnabled: boolean): string[] {
     const dependencies: string[] = [];
     
     activeInstructions.forEach(activeInst => {
-        if (newInst.sourceReg1?.number === activeInst.destReg?.number ||
-            newInst.sourceReg2?.number === activeInst.destReg?.number) {
-            dependencies.push(activeInst.value);
-        }
-        
-        if (newInst.destReg?.number === activeInst.destReg?.number) {
-            dependencies.push(activeInst.value);
-        }
-        
-        if (newInst.destReg?.number === activeInst.sourceReg1?.number ||
-            newInst.destReg?.number === activeInst.sourceReg2?.number) {
-            dependencies.push(activeInst.value);
+        if (!activeInst.destReg) return;
+
+        const hasSourceReg1Dependency = newInst.sourceReg1 && 
+            newInst.sourceReg1.number === activeInst.destReg.number;
+        const hasSourceReg2Dependency = newInst.sourceReg2 && 
+            newInst.sourceReg2.number === activeInst.destReg.number;
+
+        // Only add as dependency if not forwardable
+        if (hasSourceReg1Dependency || hasSourceReg2Dependency) {
+            if (!forwardingEnabled || 
+                (activeInst.stage !== 'EX' && activeInst.stage !== 'MEM')) {
+                dependencies.push(activeInst.value);
+            }
         }
     });
     

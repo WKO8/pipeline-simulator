@@ -14,6 +14,7 @@ export interface ForwardingPath {
 export interface Instruction {
     value: string;
     color: string;
+    type: string;
     stage: 'IF' | 'DE' | 'EX' | 'MEM' | 'WB';
     resourceUnit?: 'ALU1' | 'ALU2' | 'LSU' | 'BRU';
     sourceReg1?: Register;

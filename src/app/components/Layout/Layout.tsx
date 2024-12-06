@@ -10,6 +10,7 @@ import GridSuperescalar from "../GridSuperescalar/GridSuperescalar";
 import PerformanceLog from "../PerformanceLog/PerformanceLog";
 import { usePipelineContext } from "@/contexts/PipelineContext";
 import ReadyInstructionsVisualizer from "../ReadyInstructionsVisualizer/ReadyInstructionsVisualizer";
+import { useForwarding } from "@/contexts/ForwardingContext";
 // import { SimulationControls } from "../SimulationControls/SimulationControls";
 // import { ThreadVisualizer } from "../ThreadVisualizer/ThreadVisualizer";
 
@@ -17,7 +18,7 @@ const Layout = () => {
   const [selectedPipeline, setSelectedPipeline] = useState("escalar")
   const [selectedMultithreading, setSelectedMultithreading] = useState("none")
   const [isRunning, setIsRunning] = useState(false);
-  const [forwardingEnabled, setForwardingEnabled] = useState(false);
+  const { forwardingEnabled, setForwardingEnabled } = useForwarding();
 
   const { addInstruction, clockCycle, setPipelineType, clearInstructions, clearMetrics } = usePipelineContext();
 
@@ -33,13 +34,13 @@ const Layout = () => {
 
   const generateRandomInstruction = () => {
     const instructions = [
-        { value: "ADD", resourceUnit: "ALU1" as const, latency: 1 },
-        { value: "SUB", resourceUnit: "ALU1" as const, latency: 1 },
-        { value: "MUL", resourceUnit: "ALU2" as const, latency: 4 },
-        { value: "DIV", resourceUnit: "ALU2" as const, latency: 4 },
-        { value: "LW", resourceUnit: "LSU" as const, latency: 3 },
-        { value: "SW", resourceUnit: "LSU" as const, latency: 3 },
-        { value: "BEQ", resourceUnit: "BRU" as const, latency: 2 }
+        { value: "ADD", type: "RR", resourceUnit: "ALU1" as const, latency: 1 },
+        { value: "SUB", type: "RR", resourceUnit: "ALU1" as const, latency: 1 },
+        { value: "MUL", type: "RI", resourceUnit: "ALU2" as const, latency: 4 },
+        { value: "DIV", type: "RI", resourceUnit: "ALU2" as const, latency: 4 },
+        { value: "LW", type: "RM", resourceUnit: "LSU" as const, latency: 3 },
+        { value: "SW", type: "RM", resourceUnit: "LSU" as const, latency: 3 },
+        { value: "BEQ", type: "B", resourceUnit: "BRU" as const, latency: 2 }
     ];
 
     const getRandomRegister = () => Math.floor(Math.random() * 32); // RISC-V has 32 registers
@@ -53,6 +54,7 @@ const Layout = () => {
         return {
             value: instruction.value,
             color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
+            type: instruction.type,
             stage: "IF" as const,
             resourceUnit: instruction.resourceUnit,
             sourceReg1: { number: src1, value: 0 },
@@ -138,9 +140,6 @@ const Layout = () => {
               value={selectedMultithreading}
               onValueChange={(value) => {
                 setSelectedMultithreading(value);
-                // if (value === 'IMT') {
-                //   setThreadingMode('IMT');
-                // }
               }}
               className="flex flex-row gap-6"
             >

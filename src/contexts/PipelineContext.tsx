@@ -1,15 +1,14 @@
 "use client";
 import { createContext, useContext, useRef, useState } from "react";
-import { ThreadContext } from '../types/ThreadContext';
 import { 
     Instruction, 
     PipelineMetrics, 
-    ThreadingMode,
-    ForwardingPath 
+    ThreadingMode
 } from '../types/PipelineTypes';
 import { SUPERSCALAR_LIMITS } from '../constants/PipelineConstants';
 import { detectDependencies, assignResourceUnit } from '../utils/PipelineUtils';
 import { countSuperscalarStallsAndBubbles } from '../logic/PipelineLogic';
+import { useForwarding } from './ForwardingContext';
 
 interface PipelineContextType {
     instructions: Instruction[];
@@ -23,10 +22,6 @@ interface PipelineContextType {
     clearMetrics: () => void;
     forwardingEnabled: boolean;
     setForwardingEnabled: (enabled: boolean) => void;
-    threads: ThreadContext[];
-    activeThread: number;
-    addThread: (instructions: Instruction[]) => void;
-    switchThread: (threadId: number) => void;
     threadingMode: ThreadingMode;
     setThreadingMode: (mode: ThreadingMode) => void;
 }
@@ -45,9 +40,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
     const [scalarReadyQueue, setScalarReadyQueue] = useState<Instruction[]>([]);
     const [superscalarReadyQueue, setSuperscalarReadyQueue] = useState<Instruction[]>([]);
     const [pipelineType, setPipelineType] = useState<'escalar' | 'superescalar'>('escalar');
-    const [forwardingEnabled, setForwardingEnabled] = useState(false);
-    const [threads, setThreads] = useState<ThreadContext[]>([]);
-    const [activeThread, setActiveThread] = useState<number>(0);
+    const { forwardingEnabled, setForwardingEnabled } = useForwarding();
     const [threadingMode, setThreadingMode] = useState<ThreadingMode>('NONE');
     const [totalStallCycles, setTotalStallCycles] = useState(0);
     const [totalBubbleCycles, setTotalBubbleCycles] = useState(0);
@@ -89,32 +82,6 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
         cycleCount.current = 0;
     };
 
-    const addThread = (instructions: Instruction[]) => {
-        const newThread: ThreadContext = {
-            id: threads.length,
-            state: 'READY',
-            priority: 1,
-            registers: {},
-            pc: 0,
-            instructions,
-            metrics: {
-                cyclesExecuted: 0,
-                instructionsCompleted: 0,
-                stallCycles: 0,
-                bubbleCycles: 0
-            }
-        };
-        setThreads(prev => [...prev, newThread]);
-    };
-    
-    const switchThread = (threadId: number) => {
-        if (threadId < threads.length) {
-            setActiveThread(threadId);
-            threads[threadId].state = 'RUNNING';
-            threads[activeThread].state = 'READY';
-        }
-    };
-
     const addInstruction = (newInstruction: Instruction) => {
         const instWithResource = assignResourceUnit(newInstruction);
         if (pipelineType === 'escalar') {
@@ -126,13 +93,6 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
 
     const clockCycle = () => {
         const isPipelineComplete = () => {
-            if (threadingMode === 'IMT') {
-                return threads.every(thread => 
-                    thread.state === 'COMPLETED' || 
-                    (thread.instructions.length === 0 && thread.state !== 'RUNNING')
-                );
-            }
-            
             const hasActiveInstructions = pipelineType === 'escalar' ? 
                 scalarInstructions.length > 0 || scalarReadyQueue.length > 0 :
                 superscalarInstructions.length > 0 || superscalarReadyQueue.length > 0;
@@ -142,32 +102,21 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
         if (isPipelineComplete()) {
             return;
         }
+
+        console.log('Current cycle:', cycleCount.current);
+        console.log('Forwarding enabled:', forwardingEnabled);
     
         cycleCount.current++;
-    
-        if (threadingMode === 'IMT') {
-            const nextThreadId = (activeThread + 1) % threads.length;
-            switchThread(nextThreadId);
-            
-            setThreads(prev => prev.map(thread => {
-                if (thread.id === activeThread) {
-                    return {
-                        ...thread,
-                        metrics: {
-                            ...thread.metrics,
-                            cyclesExecuted: thread.metrics.cyclesExecuted + 1
-                        }
-                    };
-                }
-                return thread;
-            }));
-        }
     
         if (pipelineType === 'escalar') {
             setScalarInstructions(prev => {
                 const completedInstructions = prev.filter(inst => inst.stage === 'WB');
                 const withoutCompletedInstructions = prev.filter(inst => inst.stage !== 'WB');
-    
+
+                withoutCompletedInstructions.forEach(inst => {
+                    console.log(`Instruction: ${inst.value}, Stage: ${inst.stage}, Dependencies:`, inst.dependencies);
+                });
+
                 const stageOccupancy = {
                     IF: withoutCompletedInstructions.filter(i => i.stage === 'IF').length,
                     DE: withoutCompletedInstructions.filter(i => i.stage === 'DE').length,
@@ -175,107 +124,80 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                     MEM: withoutCompletedInstructions.filter(i => i.stage === 'MEM').length,
                     WB: withoutCompletedInstructions.filter(i => i.stage === 'WB').length
                 };
-    
-                const countStallsAndBubbles = (instructions: Instruction[]) => {
-                    let newStalls = 0;
-                    let newBubbles = 0;
-                
-                    // Count stalls from data hazards
-                    instructions.forEach(inst => {
-                        if (inst.stage === 'DE') {
-                            // Data hazards
-                            const hasDataHazard = inst.dependencies && inst.dependencies.length > 0;
-                            
-                            // Structural hazards - EX stage occupied
-                            const hasStructuralHazard = instructions.some(
-                                other => other.stage === 'EX' && other.remainingLatency > 0
-                            );
-                
-                            // Resource conflicts - specific ALU required but occupied
-                            const resourceConflict = instructions.some(
-                                other => other.stage === 'EX' && 
-                                other.resourceUnit === inst.resourceUnit
-                            );
-                
-                            // Multi-cycle instruction blocking
-                            const blockedByMultiCycle = instructions.some(
-                                other => other.stage === 'EX' && 
-                                other.remainingLatency > 1
-                            );
-                
-                            if (hasDataHazard || hasStructuralHazard || resourceConflict || blockedByMultiCycle) {
-                                newStalls++;
-                                // Each stall in DE creates bubbles in previous stages
-                                newBubbles += instructions.filter(i => i.stage === 'IF').length;
-                            }
-                        }
-                    });
-                
-                    // Update total counts
-                    setTotalStallCycles(prev => prev + newStalls);
-                    setTotalBubbleCycles(prev => prev + newBubbles);
-                
-                    return { newStalls, newBubbles };
-                };
-    
-                const updatedInstructions: Instruction[] = withoutCompletedInstructions.map(inst => {
-                    const currentDependencies = inst.dependencies?.filter(dep => 
-                        withoutCompletedInstructions.some(other => other.value === dep)
-                    );
-    
+
+                const stagePriority = { 'WB': 0, 'MEM': 1, 'EX': 2, 'DE': 3, 'IF': 4 };
+
+                const processedInstructions: Instruction[] = [];
+
+                const updatedInstructions: Instruction[] = [...withoutCompletedInstructions]
+                .sort((a, b) => stagePriority[a.stage] - stagePriority[b.stage])
+                .map(inst => {
+                    const currentStages = processedInstructions.map(i => i.stage);
+                    console.log(`Processing instruction ${inst.value} in stage ${inst.stage}`);
+                    
+                    // Handle WB stage
+                    if (inst.stage === 'WB') {
+                        return inst;
+                    }
+
+                    // Handle MEM stage
+                    if (inst.stage === 'MEM') {
+                        return {
+                            ...inst,
+                            stage: 'WB'
+                        };
+                    }
+
+                    // Handle EX stage
                     if (inst.stage === 'EX') {
                         if (inst.remainingLatency > 1) {
                             return { 
                                 ...inst, 
-                                remainingLatency: inst.remainingLatency - 1,
-                                dependencies: currentDependencies 
+                                remainingLatency: inst.remainingLatency - 1
                             };
                         }
+                        const nextStage: 'MEM' | 'WB' = inst.type === 'RM' ? 'MEM' : 'WB';
                         return { 
                             ...inst, 
-                            stage: 'MEM', 
-                            remainingLatency: 0,
-                            dependencies: currentDependencies 
+                            stage: nextStage,
+                            remainingLatency: 0
                         };
                     }
-    
+
+                    // Handle DE stage
                     if (inst.stage === 'DE') {
-                        const exStageOccupied = withoutCompletedInstructions.some(
-                            other => other.stage === 'EX' && other.remainingLatency > 0
-                        );
-                        if (!exStageOccupied && !currentDependencies?.length) {
-                            return { 
-                                ...inst, 
-                                stage: 'EX', 
+                        const deps = detectDependencies(inst, withoutCompletedInstructions, forwardingEnabled);
+                        const exInst = withoutCompletedInstructions.find(i => i.stage === 'EX');
+                        
+                        // Allow movement to EX if forwarding is enabled and dependency is in EX
+                        const canForward = forwardingEnabled && exInst && deps.includes(exInst.value);
+                        const canMove = !deps.length || canForward;
+            
+                        if (canMove && !currentStages.includes('EX')) {
+                            return {
+                                ...inst,
+                                stage: 'EX',
                                 remainingLatency: inst.latency,
-                                dependencies: currentDependencies 
+                                dependencies: []
                             };
                         }
-                        return { 
-                            ...inst, 
-                            dependencies: currentDependencies 
+                        return { ...inst, dependencies: deps };
+                    }
+                    
+                    // Handle IF stage
+                     if (inst.stage === 'IF' && !currentStages.includes('DE')) {
+                        return {
+                            ...inst,
+                            stage: 'DE',
+                            dependencies: detectDependencies(inst, withoutCompletedInstructions, forwardingEnabled)
                         };
                     }
-    
-                    let nextStage: 'IF' | 'DE' | 'EX' | 'MEM' | 'WB' = inst.stage;
-                    switch(inst.stage) {
-                        case 'IF': 
-                            nextStage = stageOccupancy.DE === 0 ? 'DE' : 'IF';
-                            break;
-                        case 'MEM': 
-                            nextStage = 'WB';
-                            break;
-                    }
-    
-                    return { 
-                        ...inst, 
-                        stage: nextStage,
-                        dependencies: currentDependencies 
-                    };
+                    
+                    processedInstructions.push(inst);
+                    return inst;
                 });
-    
-                countStallsAndBubbles(withoutCompletedInstructions);
-    
+            
+                // Update metrics
                 setMetrics(prev => ({
                     totalCycles: cycleCount.current,
                     completedInstructions: prev.completedInstructions + completedInstructions.length,
@@ -289,18 +211,23 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                         WB: prev.resourceUtilization.WB + (completedInstructions.length > 0 ? 1 : 0)
                     }
                 }));
-    
+            
+                // Fetch new instruction if possible
                 const hasInstructionInIF = updatedInstructions.some(inst => inst.stage === 'IF');
-                
                 if (!hasInstructionInIF && scalarReadyQueue.length > 0) {
                     const [nextInst, ...remainingQueue] = scalarReadyQueue;
                     const instWithResource = assignResourceUnit(nextInst);
-                    const dependencies = detectDependencies(instWithResource, updatedInstructions);
-                    const newInst = { ...instWithResource, dependencies };
+                    const newInst: Instruction = { 
+                        ...instWithResource, 
+                        stage: 'IF'
+                    };
                     setScalarReadyQueue(remainingQueue);
                     return [...updatedInstructions, newInst];
                 }
-    
+            
+                console.log('Updated instructions:', updatedInstructions);
+                console.log('Ready queue length:', scalarReadyQueue.length);
+
                 return updatedInstructions;
             });
         } else {
@@ -330,15 +257,6 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                             resourceInUse[i.resourceUnit]++;
                         }
                     });
-            
-                const forwardingPaths: ForwardingPath[] = forwardingEnabled ? 
-                    withoutCompletedInstructions
-                        .filter(inst => (inst.stage === 'EX' && inst.remainingLatency === 1) || inst.stage === 'MEM')
-                        .map(inst => ({
-                            sourceStage: inst.stage as 'EX' | 'MEM' | 'WB',
-                            register: inst.destReg?.number || 0,
-                            value: 0
-                        })) : [];
             
                 const { currentStalls, currentBubbles } = countSuperscalarStallsAndBubbles(
                     withoutCompletedInstructions, 
@@ -380,13 +298,8 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
             
                     if (inst.stage === 'DE') {
                         if (forwardingEnabled) {
-                            const requiredRegisters = [inst.sourceReg1?.number, inst.sourceReg2?.number]
-                                .filter((reg): reg is number => reg !== undefined);
-                            
-                            const dataAvailable = requiredRegisters.every(reg =>
-                                forwardingPaths.some(path => path.register === reg)
-                            );
-                            
+                            const dataAvailable = !currentDependencies?.length;
+                            // Add the canMoveToEX check here
                             if (dataAvailable && canMoveToEX(inst) && stageOccupancy.EX < SUPERSCALAR_LIMITS.EX) {
                                 if (inst.resourceUnit) {
                                     resourceInUse[inst.resourceUnit]++;
@@ -398,20 +311,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                                     dependencies: [] 
                                 };
                             }
-                        } else {
-                            if (!currentDependencies?.length && canMoveToEX(inst) && stageOccupancy.EX < SUPERSCALAR_LIMITS.EX) {
-                                if (inst.resourceUnit) {
-                                    resourceInUse[inst.resourceUnit]++;
-                                }
-                                return { 
-                                    ...inst, 
-                                    stage: 'EX', 
-                                    remainingLatency: inst.latency,
-                                    dependencies: [] 
-                                };
-                            }
                         }
-                        return { ...inst, dependencies: currentDependencies };
                     }
             
                     let nextStage: 'IF' | 'DE' | 'EX' | 'MEM' | 'WB' = inst.stage;
@@ -451,7 +351,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                         .slice(0, availableSlots)
                         .map(inst => {
                             const instWithResource = assignResourceUnit(inst);
-                            const dependencies = detectDependencies(instWithResource, updatedInstructions);
+                            const dependencies = detectDependencies(instWithResource, updatedInstructions, forwardingEnabled);
                             return { 
                                 ...instWithResource, 
                                 dependencies, 
@@ -490,10 +390,6 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
             clearMetrics,
             forwardingEnabled,
             setForwardingEnabled,
-            activeThread,
-            addThread,
-            switchThread,
-            threads,
             threadingMode,
             setThreadingMode,
         }}>

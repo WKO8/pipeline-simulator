@@ -28,9 +28,11 @@ export const ReadyInstructionsVisualizer = () => {
         const instruction = {
             ...newInstruction,
             color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
+            type: 'RR',
             stage: 'IF' as const,
             latency: 1,
-            remainingLatency: 1
+            remainingLatency: 1,
+            dependencies: []
         };
         addInstruction(instruction);
     };
