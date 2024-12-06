@@ -20,7 +20,7 @@ export const ReadyInstructionsVisualizer = () => {
         destReg: { number: 0, value: 0 }
     });
 
-    const instructionTypes = ['ADD', 'SUB', 'MUL', 'DIV', 'LW', 'SW', 'BEQ', 'BNE', 'BLT', 'BGE', 'JAL'];
+    const instructionTypes = ['ADD', 'SUB', 'MUL', 'DIV', 'LW', 'SW', 'BEQ'];
     const resourceUnits = ['ALU1', 'ALU2', 'LSU', 'BRU'];
     const registers = Array.from({ length: 32 }, (_, i) => i); // R0 to R31
 

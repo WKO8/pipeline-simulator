@@ -133,8 +133,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 .sort((a, b) => stagePriority[a.stage] - stagePriority[b.stage])
                 .map(inst => {
                     const currentStages = processedInstructions.map(i => i.stage);
-                    console.log(`Processing instruction ${inst.value} in stage ${inst.stage}`);
-                    
+                    console.log(`Processing instruction ${inst.value}, type ${inst.type} in stage ${inst.stage}`);
                     // Handle WB stage
                     if (inst.stage === 'WB') {
                         return inst;

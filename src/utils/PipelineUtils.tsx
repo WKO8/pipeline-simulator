@@ -1,6 +1,11 @@
 import { Instruction } from '../types/PipelineTypes';
 
 export function detectDependencies(newInst: Instruction, activeInstructions: Instruction[], forwardingEnabled: boolean): string[] {
+    if (["ADD, SUB"].includes(newInst.value)) newInst.type = "RR";
+    else if (["MUL", "DIV"].includes(newInst.type)) newInst.type = "RI";
+    else if (["LW", "SW"].includes(newInst.value)) newInst.type = "RM";
+    else newInst.type = "B";
+    
     const dependencies: string[] = [];
     
     activeInstructions.forEach(activeInst => {
