@@ -7,7 +7,7 @@ const GridSuperescalar = () => {
   
   return (
       <div className={styles.gridSuperescalar}>
-          {['IF', 'DE', 'EX', 'MEM', 'WB'].map((stage) => (
+          {['IF', 'DE', 'EXE', 'MEM', 'WB'].map((stage) => (
               <div key={stage} className={styles.card}>
                   <div className={styles.cardTitle}>{stage}</div>
                   <div className={styles.cardContent}>

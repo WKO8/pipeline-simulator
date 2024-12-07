@@ -15,7 +15,7 @@ export interface Instruction {
     value: string;
     color: string;
     type: string;
-    stage: 'IF' | 'DE' | 'EX' | 'MEM' | 'WB';
+    stage: 'IF' | 'DE' | 'EXE' | 'MEM' | 'WB';
     resourceUnit?: 'ALU1' | 'ALU2' | 'LSU' | 'BRU';
     sourceReg1?: Register;
     sourceReg2?: Register;
@@ -33,7 +33,7 @@ export interface PipelineMetrics {
     resourceUtilization: {
         IF: number;
         DE: number;
-        EX: number;
+        EXE: number;
         MEM: number;
         WB: number;
     };

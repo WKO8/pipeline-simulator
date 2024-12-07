@@ -57,7 +57,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
         resourceUtilization: {
             IF: 0,
             DE: 0,
-            EX: 0,
+            EXE: 0,
             MEM: 0,
             WB: 0
         }
@@ -72,7 +72,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
             resourceUtilization: {
                 IF: 0,
                 DE: 0,
-                EX: 0,
+                EXE: 0,
                 MEM: 0,
                 WB: 0
             }
@@ -117,12 +117,12 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 const stageOccupancy = {
                     IF: withoutCompletedInstructions.filter(i => i.stage === 'IF').length,
                     DE: withoutCompletedInstructions.filter(i => i.stage === 'DE').length,
-                    EX: withoutCompletedInstructions.filter(i => i.stage === 'EX').length,
+                    EXE: withoutCompletedInstructions.filter(i => i.stage === 'EXE').length,
                     MEM: withoutCompletedInstructions.filter(i => i.stage === 'MEM').length,
                     WB: withoutCompletedInstructions.filter(i => i.stage === 'WB').length
                 };
         
-                const stagePriority = { 'WB': 0, 'MEM': 1, 'EX': 2, 'DE': 3, 'IF': 4 };
+                const stagePriority = { 'WB': 0, 'MEM': 1, 'EXE': 2, 'DE': 3, 'IF': 4 };
                 const processedInstructions: Instruction[] = [];
         
                 const updatedInstructions: Instruction[] = [...withoutCompletedInstructions]
@@ -136,7 +136,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                         }
         
                         // Handle MEM stage
-                        if (inst.stage === 'MEM' && !currentStages.includes('WB')) {
+                        if (inst.stage === 'MEM' && !currentStages.includes('WB') && stageOccupancy['WB'] === 0) {
                             return {
                                 ...inst,
                                 stage: 'WB'
@@ -144,15 +144,30 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                         }
         
                         // Handle EX stage
-                        if (inst.stage === 'EX') {
+                        if (inst.stage === 'EXE') {
                             if (inst.remainingLatency > 1) {
                                 return { 
                                     ...inst, 
                                     remainingLatency: inst.remainingLatency - 1
                                 };
                             }
-                            const nextStage: 'MEM' | 'WB' = inst.type === 'RM' ? 'MEM' : 'WB';
-                            if (!currentStages.includes(nextStage)) {
+
+                            const memInst = withoutCompletedInstructions.find(i => i.stage === 'MEM');
+                            const wbInst = withoutCompletedInstructions.filter(i => i.stage === 'WB');
+
+                            console.log(`Instruction: ${inst.type}`);
+
+                            const nextStage: 'MEM' | 'WB' = ['RM', 'RI'].includes(inst.type) ? 'MEM' : 'WB';
+
+                            console.log(`Next stage: ${nextStage}`);
+
+
+                            // Check if any instruction in MEM or WB 
+                            const canAdvance = nextStage === 'MEM' 
+                                ? !memInst || memInst?.remainingLatency === 1 
+                                : !wbInst.length || wbInst.find(i => i.remainingLatency === 1) && !memInst;
+
+                            if (!currentStages.includes(nextStage) && canAdvance) {
                                 return { 
                                     ...inst, 
                                     stage: nextStage,
@@ -164,19 +179,23 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                         // Handle DE stage
                         if (inst.stage === 'DE') {
                             const deps = detectDependencies(inst, withoutCompletedInstructions, forwardingEnabled);
-                            const exInst = withoutCompletedInstructions.find(i => i.stage === 'EX');
+                            const exInst = withoutCompletedInstructions.find(i => i.stage === 'EXE');
                             
                             const canForward = forwardingEnabled && 
                                              exInst && 
                                              deps.includes(exInst.value) && 
                                              ["ADD", "SUB"].includes(exInst.value);
-                            
-                            const canMove = (!deps.length || canForward) && !currentStages.includes('EX');
+
+                            const canMove = (
+                                !deps.length || canForward) 
+                                && !currentStages.includes('EXE') 
+                                && !exInst || 
+                                exInst?.remainingLatency === 1;
                 
                             if (canMove) {
                                 return {
                                     ...inst,
-                                    stage: 'EX',
+                                    stage: 'EXE',
                                     remainingLatency: inst.latency,
                                     dependencies: []
                                 };
@@ -186,11 +205,22 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
         
                         // Handle IF stage
                         if (inst.stage === 'IF' && !currentStages.includes('DE')) {
-                            return {
-                                ...inst,
-                                stage: 'DE',
-                                dependencies: detectDependencies(inst, withoutCompletedInstructions, forwardingEnabled)
-                            };
+                            // Get instructions in DE stage
+                            const deStageInsts = withoutCompletedInstructions.filter(i => i.stage === 'DE');
+                            const exInst = withoutCompletedInstructions.find(i => i.stage === 'EXE');
+
+                            // Check if any instruction in DE has remainingLatency === 1
+                            const canAdvance = !deStageInsts.length || deStageInsts.find(i => i.dependencies?.length === 0) &&
+                                            !exInst || 
+                                            exInst?.remainingLatency === 1;
+
+                            if (canAdvance) {
+                                return {
+                                    ...inst,
+                                    stage: 'DE',
+                                    dependencies: detectDependencies(inst, withoutCompletedInstructions, forwardingEnabled)
+                                };
+                            }
                         }
         
                         processedInstructions.push(inst);
@@ -206,7 +236,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                     resourceUtilization: {
                         IF: prev.resourceUtilization.IF + (stageOccupancy.IF > 0 ? 1 : 0),
                         DE: prev.resourceUtilization.DE + (stageOccupancy.DE > 0 ? 1 : 0),
-                        EX: prev.resourceUtilization.EX + (stageOccupancy.EX > 0 ? 1 : 0),
+                        EXE: prev.resourceUtilization.EXE + (stageOccupancy.EXE > 0 ? 1 : 0),
                         MEM: prev.resourceUtilization.MEM + (stageOccupancy.MEM > 0 ? 1 : 0),
                         WB: prev.resourceUtilization.WB + (completedInstructions.length > 0 ? 1 : 0)
                     }
@@ -235,7 +265,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 const stageOccupancy = {
                     IF: withoutCompletedInstructions.filter(i => i.stage === 'IF').length,
                     DE: withoutCompletedInstructions.filter(i => i.stage === 'DE').length,
-                    EX: withoutCompletedInstructions.filter(i => i.stage === 'EX').length,
+                    EXE: withoutCompletedInstructions.filter(i => i.stage === 'EXE').length,
                     MEM: withoutCompletedInstructions.filter(i => i.stage === 'MEM').length,
                     WB: withoutCompletedInstructions.filter(i => i.stage === 'WB').length
                 };
@@ -248,7 +278,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 };
             
                 withoutCompletedInstructions
-                    .filter(i => i.stage === 'EX')
+                    .filter(i => i.stage === 'EXE')
                     .forEach(i => {
                         if (i.resourceUnit) {
                             resourceInUse[i.resourceUnit]++;
@@ -274,7 +304,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                         withoutCompletedInstructions.some(other => other.value === dep)
                     );
             
-                    if (inst.stage === 'EX') {
+                    if (inst.stage === 'EXE') {
                         if (inst.remainingLatency > 1) {
                             return { 
                                 ...inst, 
@@ -297,13 +327,13 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                         if (forwardingEnabled) {
                             const dataAvailable = !currentDependencies?.length;
                             // Add the canMoveToEX check here
-                            if (dataAvailable && canMoveToEX(inst) && stageOccupancy.EX < SUPERSCALAR_LIMITS.EX) {
+                            if (dataAvailable && canMoveToEX(inst) && stageOccupancy.EXE < SUPERSCALAR_LIMITS.EX) {
                                 if (inst.resourceUnit) {
                                     resourceInUse[inst.resourceUnit]++;
                                 }
                                 return { 
                                     ...inst, 
-                                    stage: 'EX', 
+                                    stage: 'EXE', 
                                     remainingLatency: inst.latency,
                                     dependencies: [] 
                                 };
@@ -311,7 +341,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                         }
                     }
             
-                    let nextStage: 'IF' | 'DE' | 'EX' | 'MEM' | 'WB' = inst.stage;
+                    let nextStage: 'IF' | 'DE' | 'EXE' | 'MEM' | 'WB' = inst.stage;
                     switch(inst.stage) {
                         case 'IF': 
                             nextStage = stageOccupancy.DE < SUPERSCALAR_LIMITS.DE ? 'DE' : 'IF';
@@ -336,7 +366,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                     resourceUtilization: {
                         IF: prev.resourceUtilization.IF + (stageOccupancy.IF > 0 ? 1 : 0),
                         DE: prev.resourceUtilization.DE + (stageOccupancy.DE > 0 ? 1 : 0),
-                        EX: prev.resourceUtilization.EX + (stageOccupancy.EX > 0 ? 1 : 0),
+                        EXE: prev.resourceUtilization.EXE + (stageOccupancy.EXE > 0 ? 1 : 0),
                         MEM: prev.resourceUtilization.MEM + (stageOccupancy.MEM > 0 ? 1 : 0),
                         WB: prev.resourceUtilization.WB + (completedInstructions.length > 0 ? 1 : 0)
                     }

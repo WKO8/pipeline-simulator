@@ -8,7 +8,7 @@ const GridEscalar = () => {
   return (
       <div>
           <div className={styles.gridEscalar}>
-              {['IF', 'DE', 'EX', 'MEM', 'WB'].map((stage) => (
+              {['IF', 'DE', 'EXE', 'MEM', 'WB'].map((stage) => (
                   <div key={stage} className={styles.card}>
                       <div className={styles.cardTitle}>{stage}</div>
                       <div className={styles.cardContent}>

@@ -2,7 +2,7 @@ import { Instruction } from '../types/PipelineTypes';
 
 export function detectDependencies(newInst: Instruction, activeInstructions: Instruction[], forwardingEnabled: boolean): string[] {
     if (["ADD, SUB"].includes(newInst.value)) newInst.type = "RR";
-    else if (["MUL", "DIV"].includes(newInst.type)) newInst.type = "RI";
+    else if (["MUL", "DIV"].includes(newInst.value)) newInst.type = "RI";
     else if (["LW", "SW"].includes(newInst.value)) newInst.type = "RM";
     else newInst.type = "B";
 
@@ -20,7 +20,7 @@ export function detectDependencies(newInst: Instruction, activeInstructions: Ins
          if (hasSourceReg1Dependency || hasSourceReg2Dependency) {
             // Only allow forwarding for RR instructions from EX stage
             const canForward = forwardingEnabled && 
-                             activeInst.stage === 'EX' && 
+                             activeInst.stage === 'EXE' && 
                              ["ADD", "SUB"].includes(activeInst.value);
                              
             // Always stall for LW dependencies
