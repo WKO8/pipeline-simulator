@@ -11,8 +11,6 @@ import PerformanceLog from "../PerformanceLog/PerformanceLog";
 import { usePipelineContext } from "@/contexts/PipelineContext";
 import ReadyInstructionsVisualizer from "../ReadyInstructionsVisualizer/ReadyInstructionsVisualizer";
 import { useForwarding } from "@/contexts/ForwardingContext";
-// import { SimulationControls } from "../SimulationControls/SimulationControls";
-// import { ThreadVisualizer } from "../ThreadVisualizer/ThreadVisualizer";
 
 const Layout = () => {
   const [selectedPipeline, setSelectedPipeline] = useState("escalar")
@@ -31,6 +29,8 @@ const Layout = () => {
     }
     return () => clearTimeout(timer);
   }, [isRunning, clockCycle]);
+
+
 
   const generateRandomInstruction = () => {
     const instructions = [
@@ -69,6 +69,154 @@ const Layout = () => {
   const handlePipelineChange = (value: string) => {
     setSelectedPipeline(value);
     setPipelineType(value as 'escalar' | 'superescalar');
+  }
+
+  const handleTest1 = () => {
+    const instruction1 = {
+      value: "ADD",
+      type: "RR",
+      color: "#a3091c",
+      resourceUnit: "ALU1" as const,
+      latency: 1,
+      stage: "IF" as const,
+      sourceReg1: { number: 1, value: 0 },
+      sourceReg2: { number: 2, value: 0 },
+      destReg: { number: 0, value: 0 },
+      remainingLatency: 1
+    };
+
+    const instruction2 = {
+      value: "ADD",
+      type: "RR",
+      color: "#0f1734",
+      resourceUnit: "ALU1" as const,
+      latency: 1,
+      stage: "IF" as const,
+      sourceReg1: { number: 0, value: 0 },
+      sourceReg2: { number: 2, value: 0 },
+      destReg: { number: 3, value: 0 },
+      remainingLatency: 1
+    };
+
+    const instruction3 = {
+      value: "SUB",
+      type: "RR",
+      color: "#197e8e",
+      resourceUnit: "ALU2" as const,
+      latency: 1,
+      stage: "IF" as const,
+      sourceReg1: { number: 6, value: 0 },
+      sourceReg2: { number: 7, value: 0 },
+      destReg: { number: 5, value: 0 },
+      remainingLatency: 1
+    };
+
+    const instruction4 = {
+      value: "SW",
+      type: "RM",
+      color: "#12728e",
+      resourceUnit: "LSU" as const,
+      latency: 1,
+      stage: "IF" as const,
+      sourceReg1: { number: 8, value: 0 },
+      sourceReg2: { number: 3, value: 0 },
+      destReg: { number: 9, value: 0 },
+      remainingLatency: 1
+    };
+
+    const instruction5 = {
+      value: "MUL",
+      type: "RI",
+      color: "#197e8e",
+      resourceUnit: "ALU2" as const,
+      latency: 1,
+      stage: "IF" as const,
+      sourceReg1: { number: 1, value: 0 },
+      sourceReg2: { number: 5, value: 0 },
+      destReg: { number: 0, value: 0 },
+      remainingLatency: 1
+    };
+
+    addInstruction(instruction1);
+    addInstruction(instruction2);
+    addInstruction(instruction3);
+    addInstruction(instruction4);
+    addInstruction(instruction5);
+
+  }
+
+  const handleTest2 = () => {
+    const instruction1 = {
+      value: "LW",
+      type: "RM",
+      color: "#e85665",
+      resourceUnit: "ALU1" as const,
+      latency: 1,
+      stage: "IF" as const,
+      sourceReg1: { number: 1, value: 0 },
+      sourceReg2: { number: 2, value: 0 },
+      destReg: { number: 0, value: 0 },
+      remainingLatency: 1
+    };
+
+    const instruction2 = {
+      value: "SUB",
+      type: "RR",
+      color: "#977954",
+      resourceUnit: "ALU1" as const,
+      latency: 1,
+      stage: "IF" as const,
+      sourceReg1: { number: 0, value: 0 },
+      sourceReg2: { number: 1, value: 0 },
+      destReg: { number: 3, value: 0 },
+      remainingLatency: 1
+    };
+
+    const instruction3 = {
+      value: "ADD",
+      type: "RR",
+      color: "#197e8e",
+      resourceUnit: "ALU2" as const,
+      latency: 1,
+      stage: "IF" as const,
+      sourceReg1: { number: 0, value: 0 },
+      sourceReg2: { number: 2, value: 0 },
+      destReg: { number: 3, value: 0 },
+      remainingLatency: 1
+    };
+
+    const instruction4 = {
+      value: "ADD",
+      type: "RR",
+      color: "#f8b586",
+      resourceUnit: "ALU2" as const,
+      latency: 1,
+      stage: "IF" as const,
+      sourceReg1: { number: 0, value: 0 },
+      sourceReg2: { number: 2, value: 0 },
+      destReg: { number: 3, value: 0 },
+      remainingLatency: 1
+    };
+
+    const instruction5 = {
+      value: "SUB",
+      type: "RR",
+      color: "#d49972",
+      resourceUnit: "ALU2" as const,
+      latency: 1,
+      stage: "IF" as const,
+      sourceReg1: { number: 7, value: 0 },
+      sourceReg2: { number: 8, value: 0 },
+      destReg: { number: 5, value: 0 },
+      remainingLatency: 1
+    };
+
+    addInstruction(instruction1);
+    addInstruction(instruction2);
+    addInstruction(instruction3);
+    addInstruction(instruction4);
+    addInstruction(instruction5);
+
   }
   
   const handleGenerate = () => {
@@ -170,7 +318,10 @@ const Layout = () => {
 
         <div className={styles.bottomBar}>
           <div className={styles.actionButtons}>
-            <Button onClick={handleGenerate} className={styles.actionButton}>Gerar Instruções</Button>
+            <Button onClick={handleTest1} className={styles.actionButton}>Teste 1</Button>
+            <Button onClick={handleTest2} className={styles.actionButton}>Teste 2</Button>
+
+            {/* <Button onClick={handleGenerate} className={styles.actionButton}>Gerar Instruções</Button> */}
             <Button onClick={handleStart} className={styles.actionButton}>Iniciar</Button>
             <Button onClick={handlePause} className={styles.actionButton}>Pausar</Button>
             <Button onClick={handleContinue} className={styles.actionButton}>Continuar</Button>
