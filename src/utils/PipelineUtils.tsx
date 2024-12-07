@@ -5,7 +5,7 @@ export function detectDependencies(newInst: Instruction, activeInstructions: Ins
     else if (["MUL", "DIV"].includes(newInst.type)) newInst.type = "RI";
     else if (["LW", "SW"].includes(newInst.value)) newInst.type = "RM";
     else newInst.type = "B";
-    
+
     const dependencies: string[] = [];
     
     activeInstructions.forEach(activeInst => {
@@ -17,9 +17,16 @@ export function detectDependencies(newInst: Instruction, activeInstructions: Ins
             newInst.sourceReg2.number === activeInst.destReg.number;
 
         // Only add as dependency if not forwardable
-        if (hasSourceReg1Dependency || hasSourceReg2Dependency) {
-            if (!forwardingEnabled || 
-                (activeInst.stage !== 'EX' && activeInst.stage !== 'MEM')) {
+         if (hasSourceReg1Dependency || hasSourceReg2Dependency) {
+            // Only allow forwarding for RR instructions from EX stage
+            const canForward = forwardingEnabled && 
+                             activeInst.stage === 'EX' && 
+                             ["ADD", "SUB"].includes(activeInst.value);
+                             
+            // Always stall for LW dependencies
+            const isLoadDependency = activeInst.value === "LW";
+
+            if (isLoadDependency || !canForward) {
                 dependencies.push(activeInst.value);
             }
         }
