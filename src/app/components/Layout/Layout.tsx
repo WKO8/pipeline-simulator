@@ -71,151 +71,138 @@ const Layout = () => {
     setPipelineType(value as 'escalar' | 'superescalar');
   }
 
-  const handleTest1 = () => {
-    const instruction1 = {
-      value: "ADD",
-      type: "RR",
-      color: "#a3091c",
-      resourceUnit: "ALU1" as const,
-      latency: 1,
-      stage: "IF" as const,
-      sourceReg1: { number: 1, value: 0 },
-      sourceReg2: { number: 2, value: 0 },
-      destReg: { number: 0, value: 0 },
-      remainingLatency: 1
-    };
+  const handleScalarTest1 = () => {
+    const instructions = [
+      {
+        value: "ADD",
+        type: "RR",
+        color: "#a3091c",
+        resourceUnit: "ALU1" as const,
+        latency: 1,
+        stage: "IF" as const,
+        sourceReg1: { number: 1, value: 0 },
+        sourceReg2: { number: 2, value: 0 },
+        destReg: { number: 0, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "ADD",
+        type: "RR",
+        color: "#0f1734",
+        resourceUnit: "ALU1" as const,
+        latency: 1,
+        stage: "IF" as const,
+        sourceReg1: { number: 0, value: 0 },
+        sourceReg2: { number: 2, value: 0 },
+        destReg: { number: 3, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "SUB",
+        type: "RR",
+        color: "#197e8e",
+        resourceUnit: "ALU2" as const,
+        latency: 1,
+        stage: "IF" as const,
+        sourceReg1: { number: 6, value: 0 },
+        sourceReg2: { number: 7, value: 0 },
+        destReg: { number: 5, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "SW",
+        type: "RM",
+        color: "#12728e",
+        resourceUnit: "LSU" as const,
+        latency: 1,
+        stage: "IF" as const,
+        sourceReg1: { number: 8, value: 0 },
+        sourceReg2: { number: 3, value: 0 },
+        destReg: { number: 9, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "MUL",
+        type: "RI",
+        color: "#197e8e",
+        resourceUnit: "ALU2" as const,
+        latency: 1,
+        stage: "IF" as const,
+        sourceReg1: { number: 1, value: 0 },
+        sourceReg2: { number: 5, value: 0 },
+        destReg: { number: 0, value: 0 },
+        remainingLatency: 1
+      }
+    ]
 
-    const instruction2 = {
-      value: "ADD",
-      type: "RR",
-      color: "#0f1734",
-      resourceUnit: "ALU1" as const,
-      latency: 1,
-      stage: "IF" as const,
-      sourceReg1: { number: 0, value: 0 },
-      sourceReg2: { number: 2, value: 0 },
-      destReg: { number: 3, value: 0 },
-      remainingLatency: 1
-    };
-
-    const instruction3 = {
-      value: "SUB",
-      type: "RR",
-      color: "#197e8e",
-      resourceUnit: "ALU2" as const,
-      latency: 1,
-      stage: "IF" as const,
-      sourceReg1: { number: 6, value: 0 },
-      sourceReg2: { number: 7, value: 0 },
-      destReg: { number: 5, value: 0 },
-      remainingLatency: 1
-    };
-
-    const instruction4 = {
-      value: "SW",
-      type: "RM",
-      color: "#12728e",
-      resourceUnit: "LSU" as const,
-      latency: 1,
-      stage: "IF" as const,
-      sourceReg1: { number: 8, value: 0 },
-      sourceReg2: { number: 3, value: 0 },
-      destReg: { number: 9, value: 0 },
-      remainingLatency: 1
-    };
-
-    const instruction5 = {
-      value: "MUL",
-      type: "RI",
-      color: "#197e8e",
-      resourceUnit: "ALU2" as const,
-      latency: 1,
-      stage: "IF" as const,
-      sourceReg1: { number: 1, value: 0 },
-      sourceReg2: { number: 5, value: 0 },
-      destReg: { number: 0, value: 0 },
-      remainingLatency: 1
-    };
-
-    addInstruction(instruction1);
-    addInstruction(instruction2);
-    addInstruction(instruction3);
-    addInstruction(instruction4);
-    addInstruction(instruction5);
-
+    instructions.map(i => addInstruction(i));
   }
 
-  const handleTest2 = () => {
-    const instruction1 = {
-      value: "LW",
-      type: "RM",
-      color: "#e85665",
-      resourceUnit: "ALU1" as const,
-      latency: 1,
-      stage: "IF" as const,
-      sourceReg1: { number: 1, value: 0 },
-      sourceReg2: { number: 2, value: 0 },
-      destReg: { number: 0, value: 0 },
-      remainingLatency: 1
-    };
-
-    const instruction2 = {
-      value: "SUB",
-      type: "RR",
-      color: "#977954",
-      resourceUnit: "ALU1" as const,
-      latency: 1,
-      stage: "IF" as const,
-      sourceReg1: { number: 0, value: 0 },
-      sourceReg2: { number: 1, value: 0 },
-      destReg: { number: 3, value: 0 },
-      remainingLatency: 1
-    };
-
-    const instruction3 = {
-      value: "ADD",
-      type: "RR",
-      color: "#197e8e",
-      resourceUnit: "ALU2" as const,
-      latency: 1,
-      stage: "IF" as const,
-      sourceReg1: { number: 0, value: 0 },
-      sourceReg2: { number: 2, value: 0 },
-      destReg: { number: 3, value: 0 },
-      remainingLatency: 1
-    };
-
-    const instruction4 = {
-      value: "ADD",
-      type: "RR",
-      color: "#f8b586",
-      resourceUnit: "ALU2" as const,
-      latency: 1,
-      stage: "IF" as const,
-      sourceReg1: { number: 0, value: 0 },
-      sourceReg2: { number: 2, value: 0 },
-      destReg: { number: 3, value: 0 },
-      remainingLatency: 1
-    };
-
-    const instruction5 = {
-      value: "SUB",
-      type: "RR",
-      color: "#d49972",
-      resourceUnit: "ALU2" as const,
-      latency: 1,
-      stage: "IF" as const,
-      sourceReg1: { number: 7, value: 0 },
-      sourceReg2: { number: 8, value: 0 },
-      destReg: { number: 5, value: 0 },
-      remainingLatency: 1
-    };
-
-    addInstruction(instruction1);
-    addInstruction(instruction2);
-    addInstruction(instruction3);
-    addInstruction(instruction4);
-    addInstruction(instruction5);
+  const handleScalarTest2 = () => {
+    const instructions = [
+      {
+        value: "LW",
+        type: "RM",
+        color: "#e85665",
+        resourceUnit: "ALU1" as const,
+        latency: 1,
+        stage: "IF" as const,
+        sourceReg1: { number: 1, value: 0 },
+        sourceReg2: { number: 2, value: 0 },
+        destReg: { number: 0, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "SUB",
+        type: "RR",
+        color: "#977954",
+        resourceUnit: "ALU1" as const,
+        latency: 1,
+        stage: "IF" as const,
+        sourceReg1: { number: 0, value: 0 },
+        sourceReg2: { number: 1, value: 0 },
+        destReg: { number: 3, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "ADD",
+        type: "RR",
+        color: "#197e8e",
+        resourceUnit: "ALU2" as const,
+        latency: 1,
+        stage: "IF" as const,
+        sourceReg1: { number: 0, value: 0 },
+        sourceReg2: { number: 2, value: 0 },
+        destReg: { number: 3, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "ADD",
+        type: "RR",
+        color: "#f8b586",
+        resourceUnit: "ALU2" as const,
+        latency: 1,
+        stage: "IF" as const,
+        sourceReg1: { number: 0, value: 0 },
+        sourceReg2: { number: 2, value: 0 },
+        destReg: { number: 3, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "SUB",
+        type: "RR",
+        color: "#d49972",
+        resourceUnit: "ALU2" as const,
+        latency: 1,
+        stage: "IF" as const,
+        sourceReg1: { number: 7, value: 0 },
+        sourceReg2: { number: 8, value: 0 },
+        destReg: { number: 5, value: 0 },
+        remainingLatency: 1
+      }
+    ]
+    
+    instructions.map(i => addInstruction(i));
 
   }
   
@@ -318,8 +305,8 @@ const Layout = () => {
 
         <div className={styles.bottomBar}>
           <div className={styles.actionButtons}>
-            <Button onClick={handleTest1} className={styles.actionButton}>Teste 1</Button>
-            <Button onClick={handleTest2} className={styles.actionButton}>Teste 2</Button>
+            <Button onClick={handleScalarTest1} className={styles.actionButton}>TE 1</Button>
+            <Button onClick={handleScalarTest2} className={styles.actionButton}>TE 2</Button>
 
             {/* <Button onClick={handleGenerate} className={styles.actionButton}>Gerar Instruções</Button> */}
             <Button onClick={handleStart} className={styles.actionButton}>Iniciar</Button>
