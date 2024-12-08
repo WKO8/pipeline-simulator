@@ -181,92 +181,135 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 const processedInstructions: Instruction[] = [];
 
                 const updatedInstructions = [...withoutCompletedInstructions]
-                    .sort((a, b) => stagePriority[a.stage] - stagePriority[b.stage])
-                    .map(inst => {
-                        const currentStages = processedInstructions.map(i => i.stage);
+                .sort((a, b) => stagePriority[a.stage] - stagePriority[b.stage])
+                .map(inst => {
+                    const currentStages = processedInstructions.map(i => i.stage);
 
-                        // Handle WB stage
-                        if (inst.stage === 'WB') {
-                            return inst;
-                        }
+                    // Handle WB stage
+                    if (inst.stage === 'WB') {
+                        return inst;
+                    }
 
-                        // Handle MEM stage
-                        if (inst.stage === 'MEM') {
+                    // Handle MEM stage
+                    if (inst.stage === 'MEM') {
+                        return {
+                            ...inst,
+                            stage: 'WB' as const
+                        };
+                    }
+
+                    // Handle EXE stage
+                    if (inst.stage === 'EXE') {
+                        const memInst = withoutCompletedInstructions.find(i => i.stage === 'MEM');
+                        const wbInst = withoutCompletedInstructions.filter(i => i.stage === 'WB');
+
+                        const nextStage = ['LW', 'SW', 'DIV', 'MUL'].includes(inst.value) ? 'MEM' : 'WB';
+
+                        const canAdvance = nextStage === 'MEM'
+                            ? true
+                            : !wbInst.length && !memInst;
+
+                        if (!currentStages.includes(nextStage) && canAdvance) {
                             return {
                                 ...inst,
-                                stage: 'WB' as const
+                                stage: nextStage as Instruction['stage'],
+                                remainingLatency: 0
                             };
                         }
+                    }
 
-                        // Handle EXE stage
-                        if (inst.stage === 'EXE') {
-                            const memInst = withoutCompletedInstructions.find(i => i.stage === 'MEM');
-                            const wbInst = withoutCompletedInstructions.filter(i => i.stage === 'WB');
+                    // Handle DE stage
+                    if (inst.stage === 'DE') {
+                        const deps = detectDependencies(inst, withoutCompletedInstructions, forwardingEnabled);
+                        const exInst = withoutCompletedInstructions.find(i => i.stage === 'EXE');
 
-                            const nextStage = ['LW', 'SW', 'DIV', 'MUL'].includes(inst.value) ? 'MEM' : 'WB';
+                        const dependenciesResolved = deps.every(dep => {
+                            const depInst = withoutCompletedInstructions.find(i => i.value === dep);
+                            return depInst && depInst.stage === 'WB';
+                        });
 
-                            const canAdvance = nextStage === 'MEM'
-                                ? true
-                                : !wbInst.length && !memInst;
+                        const canForward = forwardingEnabled &&
+                            exInst &&
+                            deps.includes(exInst.value) &&
+                            ["ADD", "SUB"].includes(exInst.value);
 
-                            if (!currentStages.includes(nextStage) && canAdvance) {
-                                return {
-                                    ...inst,
-                                    stage: nextStage as Instruction['stage'],
-                                    remainingLatency: 0
-                                };
-                            }
+                        const canMove = (
+                            dependenciesResolved || canForward) &&
+                            !currentStages.includes('EXE') &&
+                            (!exInst || exInst?.remainingLatency === 1);
+
+                        if (canMove) {
+                            return {
+                                ...inst,
+                                stage: 'EXE' as const,
+                                remainingLatency: inst.latency,
+                                dependencies: []
+                            };
                         }
+                        return { ...inst, dependencies: deps };
+                    }
 
-                        // Handle DE stage
-                        if (inst.stage === 'DE') {
-                            const deps = detectDependencies(inst, withoutCompletedInstructions, forwardingEnabled);
-                            const exInst = withoutCompletedInstructions.find(i => i.stage === 'EXE');
+                    // Handle IF stage
+                    if (inst.stage === 'IF') {
+                        const deStageInsts = withoutCompletedInstructions.filter(i => i.stage === 'DE');
 
-                            const dependenciesResolved = deps.every(dep => {
-                                const depInst = withoutCompletedInstructions.find(i => i.value === dep);
-                                return depInst && depInst.stage === 'WB';
-                            });
+                        const canAdvance = !deStageInsts.length || deStageInsts.every(i => i.dependencies?.length === 0);
 
-                            const canForward = forwardingEnabled &&
-                                exInst &&
-                                deps.includes(exInst.value) &&
-                                ["ADD", "SUB"].includes(exInst.value);
-
-                            const canMove = (
-                                dependenciesResolved || canForward) &&
-                                !currentStages.includes('EXE') &&
-                                (!exInst || exInst?.remainingLatency === 1);
-
-                            if (canMove) {
-                                return {
-                                    ...inst,
-                                    stage: 'EXE' as const,
-                                    remainingLatency: inst.latency,
-                                    dependencies: []
-                                };
-                            }
-                            return { ...inst, dependencies: deps };
+                        if (canAdvance) {
+                            return {
+                                ...inst,
+                                stage: 'DE' as const,
+                                dependencies: detectDependencies(inst, withoutCompletedInstructions, forwardingEnabled)
+                            };
                         }
+                    }
 
-                        // Handle IF stage
-                        if (inst.stage === 'IF') {
-                            const deStageInsts = withoutCompletedInstructions.filter(i => i.stage === 'DE');
+                    // Check if any instruction in DE can move to EXE
+                    const deInsts = withoutCompletedInstructions.filter(i => i.stage === 'DE');
+                    let ifInstToAdvance: Instruction | undefined = undefined;
+                    
+                    ifInstToAdvance = withoutCompletedInstructions.find(i => i.stage === 'IF');
 
-                            const canAdvance = !deStageInsts.length || deStageInsts.every(i => i.dependencies?.length === 0);
+                    deInsts.forEach(deInst => {
+                        const deps = detectDependencies(deInst, withoutCompletedInstructions, forwardingEnabled);
+                        const exInst = withoutCompletedInstructions.find(i => i.stage === 'EXE');
 
-                            if (canAdvance) {
-                                return {
-                                    ...inst,
-                                    stage: 'DE' as const,
-                                    dependencies: detectDependencies(inst, withoutCompletedInstructions, forwardingEnabled)
-                                };
-                            }
+                        const dependenciesResolved = deps.every(dep => {
+                            const depInst = withoutCompletedInstructions.find(i => i.value === dep);
+                            return depInst && depInst.stage === 'WB';
+                        });
+
+                        const canForward = forwardingEnabled &&
+                            exInst &&
+                            deps.includes(exInst.value) &&
+                            ["ADD", "SUB"].includes(exInst.value);
+
+                        const canMove = (
+                            dependenciesResolved || canForward) &&
+                            !currentStages.includes('EXE') &&
+                            (!exInst || exInst?.remainingLatency === 1);
+
+                        if (canMove) {
+                            // Move the instruction in IF to DE immediately
+                            ifInstToAdvance = withoutCompletedInstructions.find(i => i.stage === 'IF');
+                        } else {
+                            ifInstToAdvance = undefined;
                         }
-
-                        processedInstructions.push(inst);
-                        return inst;
                     });
+
+                    // If we found an IF instruction to advance, return it
+                    // Check if we found an IF instruction to advance
+                    if (ifInstToAdvance) {
+                        return {
+                            ...ifInstToAdvance,
+                            stage: 'DE' as const,
+                            dependencies: detectDependencies(ifInstToAdvance, withoutCompletedInstructions, forwardingEnabled)
+                        };
+                    }
+
+                    processedInstructions.push(inst);
+                    return inst;
+                });
 
                 // Update metrics
                 setMetrics(prev => ({
