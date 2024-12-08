@@ -167,7 +167,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
             setScalarInstructions(prev => {
                 const completedInstructions = prev.filter(inst => inst.stage === 'WB');
                 const withoutCompletedInstructions = prev.filter(inst => inst.stage !== 'WB');
-        
+
                 // Track stage occupancy
                 const stageOccupancy = {
                     IF: withoutCompletedInstructions.filter(i => i.stage === 'IF').length,
@@ -176,112 +176,98 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                     MEM: withoutCompletedInstructions.filter(i => i.stage === 'MEM').length,
                     WB: withoutCompletedInstructions.filter(i => i.stage === 'WB').length
                 };
-        
-                const stagePriority = { 'WB': 0, 'MEM': 1, 'EXE': 2, 'DE': 3, 'IF': 4 };
+
+                const stagePriority: { [key in Instruction['stage']]: number } = { 'WB': 0, 'MEM': 1, 'EXE': 2, 'DE': 3, 'IF': 4 };
                 const processedInstructions: Instruction[] = [];
-        
-                const updatedInstructions: Instruction[] = [...withoutCompletedInstructions]
+
+                const updatedInstructions = [...withoutCompletedInstructions]
                     .sort((a, b) => stagePriority[a.stage] - stagePriority[b.stage])
                     .map(inst => {
                         const currentStages = processedInstructions.map(i => i.stage);
-                        
+
                         // Handle WB stage
                         if (inst.stage === 'WB') {
                             return inst;
                         }
-        
+
                         // Handle MEM stage
-                        if (inst.stage === 'MEM' && !currentStages.includes('WB') && stageOccupancy['WB'] === 0) {
+                        if (inst.stage === 'MEM') {
                             return {
                                 ...inst,
-                                stage: 'WB'
+                                stage: 'WB' as const
                             };
                         }
-        
-                        // Handle EX stage
-                        if (inst.stage === 'EXE') {
-                            if (inst.remainingLatency > 1) {
-                                return { 
-                                    ...inst, 
-                                    remainingLatency: inst.remainingLatency - 1
-                                };
-                            }
 
+                        // Handle EXE stage
+                        if (inst.stage === 'EXE') {
                             const memInst = withoutCompletedInstructions.find(i => i.stage === 'MEM');
                             const wbInst = withoutCompletedInstructions.filter(i => i.stage === 'WB');
 
-                            console.log(`Instruction: ${inst.type}`);
+                            const nextStage = ['LW', 'SW', 'DIV', 'MUL'].includes(inst.value) ? 'MEM' : 'WB';
 
-                            const nextStage: 'MEM' | 'WB' = ['RM', 'RI'].includes(inst.type) ? 'MEM' : 'WB';
-
-                            console.log(`Next stage: ${nextStage}`);
-
-
-                            // Check if any instruction in MEM or WB 
-                            const canAdvance = nextStage === 'MEM' 
-                                ? !memInst || memInst?.remainingLatency === 1 
-                                : !wbInst.length || wbInst.find(i => i.remainingLatency === 1) && !memInst;
+                            const canAdvance = nextStage === 'MEM'
+                                ? true
+                                : !wbInst.length && !memInst;
 
                             if (!currentStages.includes(nextStage) && canAdvance) {
-                                return { 
-                                    ...inst, 
-                                    stage: nextStage,
+                                return {
+                                    ...inst,
+                                    stage: nextStage as Instruction['stage'],
                                     remainingLatency: 0
                                 };
                             }
                         }
-        
+
                         // Handle DE stage
                         if (inst.stage === 'DE') {
                             const deps = detectDependencies(inst, withoutCompletedInstructions, forwardingEnabled);
                             const exInst = withoutCompletedInstructions.find(i => i.stage === 'EXE');
-                            
-                            const canForward = forwardingEnabled && 
-                                             exInst && 
-                                             deps.includes(exInst.value) && 
-                                             ["ADD", "SUB"].includes(exInst.value);
+
+                            const dependenciesResolved = deps.every(dep => {
+                                const depInst = withoutCompletedInstructions.find(i => i.value === dep);
+                                return depInst && depInst.stage === 'WB';
+                            });
+
+                            const canForward = forwardingEnabled &&
+                                exInst &&
+                                deps.includes(exInst.value) &&
+                                ["ADD", "SUB"].includes(exInst.value);
 
                             const canMove = (
-                                !deps.length || canForward) 
-                                && !currentStages.includes('EXE') 
-                                && !exInst || 
-                                exInst?.remainingLatency === 1;
-                
+                                dependenciesResolved || canForward) &&
+                                !currentStages.includes('EXE') &&
+                                (!exInst || exInst?.remainingLatency === 1);
+
                             if (canMove) {
                                 return {
                                     ...inst,
-                                    stage: 'EXE',
+                                    stage: 'EXE' as const,
                                     remainingLatency: inst.latency,
                                     dependencies: []
                                 };
                             }
                             return { ...inst, dependencies: deps };
                         }
-        
-                        // Handle IF stage
-                        if (inst.stage === 'IF' && !currentStages.includes('DE')) {
-                            // Get instructions in DE stage
-                            const deStageInsts = withoutCompletedInstructions.filter(i => i.stage === 'DE');
-                            const exInst = withoutCompletedInstructions.find(i => i.stage === 'EXE');
 
-                            // Check if any instruction in DE has remainingLatency === 1
-                            const canAdvance = !deStageInsts.length || deStageInsts.find(i => i.dependencies?.length === 0) &&
-                                            !exInst || 
-                                            exInst?.remainingLatency === 1;
+                        // Handle IF stage
+                        if (inst.stage === 'IF') {
+                            const deStageInsts = withoutCompletedInstructions.filter(i => i.stage === 'DE');
+
+                            const canAdvance = !deStageInsts.length || deStageInsts.every(i => i.dependencies?.length === 0);
 
                             if (canAdvance) {
                                 return {
                                     ...inst,
-                                    stage: 'DE',
+                                    stage: 'DE' as const,
                                     dependencies: detectDependencies(inst, withoutCompletedInstructions, forwardingEnabled)
                                 };
                             }
                         }
-        
+
                         processedInstructions.push(inst);
                         return inst;
                     });
-        
+
                 // Update metrics
                 setMetrics(prev => ({
                     totalCycles: cycleCount.current,
@@ -296,20 +282,20 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                         WB: prev.resourceUtilization.WB + (completedInstructions.length > 0 ? 1 : 0)
                     }
                 }));
-        
+
                 // Fetch new instruction if possible
                 const hasInstructionInIF = updatedInstructions.some(inst => inst.stage === 'IF');
                 if (!hasInstructionInIF && scalarReadyQueue.length > 0) {
                     const [nextInst, ...remainingQueue] = scalarReadyQueue;
                     const instWithResource = assignResourceUnit(nextInst);
-                    const newInst: Instruction = { 
-                        ...instWithResource, 
+                    const newInst: Instruction = {
+                        ...instWithResource,
                         stage: 'IF'
                     };
                     setScalarReadyQueue(remainingQueue);
                     return [...updatedInstructions, newInst];
                 }
-        
+
                 return updatedInstructions;
             });
         } else {
