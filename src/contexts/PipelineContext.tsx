@@ -9,6 +9,7 @@ import { SUPERSCALAR_LIMITS } from '../constants/PipelineConstants';
 import { detectDependencies, assignResourceUnit } from '../utils/PipelineUtils';
 import { countSuperscalarStallsAndBubbles } from '../logic/PipelineLogic';
 import { useForwarding } from './ForwardingContext';
+import { ThreadContext } from "@/types/ThreadContext";
 
 interface PipelineContextType {
     instructions: Instruction[];
@@ -24,6 +25,8 @@ interface PipelineContextType {
     setForwardingEnabled: (enabled: boolean) => void;
     threadingMode: ThreadingMode;
     setThreadingMode: (mode: ThreadingMode) => void;
+    threads: ThreadContext[];
+    addThread: (instructions: Instruction[]) => void;
 }
 
 export const PipelineContext = createContext<PipelineContextType | undefined>(undefined);
@@ -41,10 +44,10 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
     const [superscalarReadyQueue, setSuperscalarReadyQueue] = useState<Instruction[]>([]);
     const [pipelineType, setPipelineType] = useState<'escalar' | 'superescalar'>('escalar');
     const { forwardingEnabled, setForwardingEnabled } = useForwarding();
-    const [threadingMode, setThreadingMode] = useState<ThreadingMode>('NONE');
     const [totalStallCycles, setTotalStallCycles] = useState(0);
     const [totalBubbleCycles, setTotalBubbleCycles] = useState(0);
-
+    const [threadingMode, setThreadingMode] = useState<ThreadingMode>('NONE');
+    const [threads, setThreads] = useState<ThreadContext[]>([]);
 
 
     const cycleCount = useRef(0);
@@ -91,7 +94,59 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
         }
     };
 
+    const addThread = (instructions: Instruction[]) => {
+        const newThread: ThreadContext = {
+            id: threads.length + 1,
+            state: 'READY',
+            priority: 1,
+            registers: {},
+            pc: 0,
+            instructions,
+            metrics: {
+                cyclesExecuted: 0,
+                instructionsCompleted: 0,
+                stallCycles: 0,
+                bubbleCycles: 0,
+            },
+        };
+        setThreads(prev => [...prev, newThread]);
+    };
+
     const clockCycle = () => {
+        if (threadingMode === 'IMT') {
+            // Lógica para IMT
+            threads.forEach(thread => {
+                if (thread.state === 'RUNNING') {
+                    const instruction = thread.instructions[thread.pc];
+                    if (instruction) {
+                        // Processar a instrução
+                        // Atualizar o PC da thread
+                        thread.pc++;
+                        // Aqui você pode adicionar a lógica para atualizar o estado da instrução
+                        // Atualizar métricas da thread
+                        thread.metrics.instructionsCompleted++;
+                    }
+                }
+            });
+        } else if (threadingMode === 'BMT') {
+            // Lógica para BMT
+            const blockSize = 2; // Número de instruções a serem executadas por thread em cada ciclo
+            threads.forEach(thread => {
+                if (thread.state === 'RUNNING') {
+                    for (let i = 0; i < blockSize; i++) {
+                        const instruction = thread.instructions[thread.pc];
+                        if (instruction) {
+                            // Processar a instrução
+                            // Atualizar o PC da thread
+                            thread.pc++;
+                            // Atualizar métricas da thread
+                            thread.metrics.instructionsCompleted++;
+                        }
+                    }
+                }
+            });
+        }
+
         const isPipelineComplete = () => {
             const hasActiveInstructions = pipelineType === 'escalar' ? 
                 scalarInstructions.length > 0 || scalarReadyQueue.length > 0 :
@@ -419,6 +474,8 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
             setForwardingEnabled,
             threadingMode,
             setThreadingMode,
+            threads,
+            addThread,
         }}>
             {children}
         </PipelineContext.Provider>
