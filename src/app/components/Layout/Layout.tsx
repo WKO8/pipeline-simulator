@@ -36,11 +36,10 @@ const Layout = () => {
     const instructions = [
         { value: "ADD", type: "RR", resourceUnit: "ALU1" as const, latency: 1 },
         { value: "SUB", type: "RR", resourceUnit: "ALU1" as const, latency: 1 },
-        { value: "MUL", type: "RI", resourceUnit: "ALU2" as const, latency: 4 },
-        { value: "DIV", type: "RI", resourceUnit: "ALU2" as const, latency: 4 },
+        { value: "MUL", type: "RI", resourceUnit: "MUL" as const, latency: 4 },
+        { value: "DIV", type: "RI", resourceUnit: "MUL" as const, latency: 4 },
         { value: "LW", type: "RM", resourceUnit: "LSU" as const, latency: 3 },
         { value: "SW", type: "RM", resourceUnit: "LSU" as const, latency: 3 },
-        { value: "BEQ", type: "B", resourceUnit: "BRU" as const, latency: 2 }
     ];
 
     const getRandomRegister = () => Math.floor(Math.random() * 32); // RISC-V has 32 registers
@@ -205,6 +204,97 @@ const Layout = () => {
     instructions.map(i => addInstruction(i));
 
   }
+
+  const handleSuperscalarTest = () => {
+    const instructions = [
+      {
+        value: "ADD",
+        type: "RR",
+        color: "#4f793b",
+        resourceUnit: "ALU1" as const,
+        latency: 1,
+        stage: "EXE" as const,
+        sourceReg1: { number: 2, value: 0 },
+        sourceReg2: { number: 3, value: 0 },
+        destReg: { number: 1, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "LW",
+        type: "RM",
+        color: "#44536e",
+        resourceUnit: "LSU" as const,
+        latency: 1,
+        stage: "EXE" as const,
+        sourceReg1: { number: 12, value: 0 },
+        sourceReg2: { number: 5, value: 0 },
+        destReg: { number: 10, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "ADD",
+        type: "RR",
+        color: "#af6533",
+        resourceUnit: "ALU2" as const,
+        latency: 1,
+        stage: "EXE" as const,
+        sourceReg1: { number: 1, value: 0 },
+        sourceReg2: { number: 6, value: 0 },
+        destReg: { number: 5, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "MUL",
+        type: "RI",
+        color: "#286aa8",
+        resourceUnit: "MUL" as const,
+        latency: 1,
+        stage: "EXE" as const,
+        sourceReg1: { number: 4, value: 0 },
+        sourceReg2: { number: 8, value: 0 },
+        destReg: { number: 7, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "ADD",
+        type: "RR",
+        color: "#503b2d",
+        resourceUnit: "ALU2" as const,
+        latency: 1,
+        stage: "EXE" as const,
+        sourceReg1: { number: 7, value: 0 },
+        sourceReg2: { number: 3, value: 0 },
+        destReg: { number: 2, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "ADD",
+        type: "RR",
+        color: "#972a8e",
+        resourceUnit: "ALU2" as const,
+        latency: 1,
+        stage: "EXE" as const,
+        sourceReg1: { number: 4, value: 0 },
+        sourceReg2: { number: 10, value: 0 },
+        destReg: { number: 9, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "ADD",
+        type: "RR",
+        color: "#616ea5",
+        resourceUnit: "ALU2" as const,
+        latency: 1,
+        stage: "EXE" as const,
+        sourceReg1: { number: 4, value: 0 },
+        sourceReg2: { number: 6, value: 0 },
+        destReg: { number: 11, value: 0 },
+        remainingLatency: 1
+      }
+    ]
+
+    instructions.map(i => addInstruction(i));
+  }
   
   const handleGenerate = () => {
     const instructionGenerator = generateRandomInstruction();
@@ -307,6 +397,7 @@ const Layout = () => {
           <div className={styles.actionButtons}>
             <Button onClick={handleScalarTest1} className={styles.actionButton}>TE 1</Button>
             <Button onClick={handleScalarTest2} className={styles.actionButton}>TE 2</Button>
+            <Button onClick={handleSuperscalarTest} className={styles.actionButton}>TSE</Button>
 
             {/* <Button onClick={handleGenerate} className={styles.actionButton}>Gerar Instruções</Button> */}
             <Button onClick={handleStart} className={styles.actionButton}>Iniciar</Button>

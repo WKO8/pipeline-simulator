@@ -267,7 +267,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                     // Check if any instruction in DE can move to EXE
                     const deInsts = withoutCompletedInstructions.filter(i => i.stage === 'DE');
                     let ifInstToAdvance: Instruction | undefined = undefined;
-                    
+
                     ifInstToAdvance = withoutCompletedInstructions.find(i => i.stage === 'IF');
 
                     deInsts.forEach(deInst => {
@@ -357,8 +357,8 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 const resourceInUse = {
                     ALU1: 0,
                     ALU2: 0,
-                    LSU: 0,
-                    BRU: 0
+                    MUL: 0,
+                    LSU: 0
                 };
             
                 withoutCompletedInstructions

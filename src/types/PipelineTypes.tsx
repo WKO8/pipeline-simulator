@@ -16,7 +16,7 @@ export interface Instruction {
     color: string;
     type: string;
     stage: 'IF' | 'DE' | 'EXE' | 'MEM' | 'WB';
-    resourceUnit?: 'ALU1' | 'ALU2' | 'LSU' | 'BRU';
+    resourceUnit?: 'ALU1' | 'ALU2' | 'MUL' | 'LSU';
     sourceReg1?: Register;
     sourceReg2?: Register;
     destReg?: Register;
