@@ -14,14 +14,14 @@ export const ReadyInstructionsVisualizer = () => {
     const { readyQueue, addInstruction } = usePipelineContext();
     const [newInstruction, setNewInstruction] = useState({
         value: '',
-        resourceUnit: 'ALU1' as 'ALU1' | 'ALU2' | 'LSU' | 'BRU',
+        resourceUnit: 'ALU1' as 'ALU1' | 'ALU2' | 'MUL' | 'LSU',
         sourceReg1: { number: 0, value: 0 },
         sourceReg2: { number: 0, value: 0 },
         destReg: { number: 0, value: 0 }
     });
 
     const instructionTypes = ['ADD', 'SUB', 'MUL', 'DIV', 'LW', 'SW', 'BEQ'];
-    const resourceUnits = ['ALU1', 'ALU2', 'LSU', 'BRU'];
+    const resourceUnits = ['ALU1', 'ALU2', 'MUL', 'LSU'];
     const registers = Array.from({ length: 32 }, (_, i) => i); // R0 to R31
 
     const handleAdd = () => {
@@ -56,7 +56,7 @@ export const ReadyInstructionsVisualizer = () => {
                     </Select>
 
                     <Select 
-                        onValueChange={(value: 'ALU1' | 'ALU2' | 'LSU' | 'BRU') => 
+                        onValueChange={(value: 'ALU1' | 'ALU2' | 'MUL' | 'LSU') => 
                             setNewInstruction({...newInstruction, resourceUnit: value})}
                     >
                         <SelectTrigger className="w-[120px]">

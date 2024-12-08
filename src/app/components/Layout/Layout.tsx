@@ -13,7 +13,7 @@ import ReadyInstructionsVisualizer from "../ReadyInstructionsVisualizer/ReadyIns
 import { useForwarding } from "@/contexts/ForwardingContext";
 
 const Layout = () => {
-  const [selectedPipeline, setSelectedPipeline] = useState("escalar")
+  const [selectedPipeline, setSelectedPipeline] = useState("superescalar")
   const [selectedMultithreading, setSelectedMultithreading] = useState("none")
   const [isRunning, setIsRunning] = useState(false);
   const { forwardingEnabled, setForwardingEnabled } = useForwarding();
@@ -211,6 +211,7 @@ const Layout = () => {
         value: "ADD",
         type: "RR",
         color: "#4f793b",
+        cycle: 0,
         resourceUnit: "ALU1" as const,
         latency: 1,
         stage: "EXE" as const,
@@ -223,6 +224,7 @@ const Layout = () => {
         value: "LW",
         type: "RM",
         color: "#44536e",
+        cycle: 0,
         resourceUnit: "LSU" as const,
         latency: 1,
         stage: "EXE" as const,
@@ -235,7 +237,8 @@ const Layout = () => {
         value: "ADD",
         type: "RR",
         color: "#af6533",
-        resourceUnit: "ALU2" as const,
+        cycle: 0,
+        resourceUnit: "ALU1" as const,
         latency: 1,
         stage: "EXE" as const,
         sourceReg1: { number: 1, value: 0 },
@@ -247,6 +250,7 @@ const Layout = () => {
         value: "MUL",
         type: "RI",
         color: "#286aa8",
+        cycle: 0,
         resourceUnit: "MUL" as const,
         latency: 1,
         stage: "EXE" as const,
@@ -259,6 +263,7 @@ const Layout = () => {
         value: "ADD",
         type: "RR",
         color: "#503b2d",
+        cycle: 0,
         resourceUnit: "ALU2" as const,
         latency: 1,
         stage: "EXE" as const,
@@ -271,7 +276,8 @@ const Layout = () => {
         value: "ADD",
         type: "RR",
         color: "#972a8e",
-        resourceUnit: "ALU2" as const,
+        cycle: 0,
+        resourceUnit: "ALU1" as const,
         latency: 1,
         stage: "EXE" as const,
         sourceReg1: { number: 4, value: 0 },
@@ -283,6 +289,7 @@ const Layout = () => {
         value: "ADD",
         type: "RR",
         color: "#616ea5",
+        cycle: 0,
         resourceUnit: "ALU2" as const,
         latency: 1,
         stage: "EXE" as const,

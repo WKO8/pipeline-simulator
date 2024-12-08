@@ -7,12 +7,12 @@ const GridSuperescalar = () => {
   
   return (
       <div className={styles.gridSuperescalar}>
-          {['IF', 'DE', 'EXE', 'MEM', 'WB'].map((stage) => (
+          {['Ciclo', 'ALU1', 'ALU2', 'MUL', 'LSU'].map((stage) => (
               <div key={stage} className={styles.card}>
                   <div className={styles.cardTitle}>{stage}</div>
                   <div className={styles.cardContent}>
                       {instructions
-                          .filter(inst => inst.stage === stage)
+                          .filter(inst => inst.resourceUnit === stage)
                           .map((inst, index) => (
                               <Instruction 
                                   key={index}

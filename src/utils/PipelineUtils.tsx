@@ -41,7 +41,7 @@ export function assignResourceUnit(instruction: Instruction): Instruction {
         case 'DIV':
             return { 
                 ...instruction, 
-                resourceUnit: Math.random() < 0.5 ? 'ALU1' : 'ALU2',
+                resourceUnit: 'MUL',
                 latency: 1,
                 remainingLatency: 1 
             };
@@ -52,13 +52,6 @@ export function assignResourceUnit(instruction: Instruction): Instruction {
                 resourceUnit: 'LSU',
                 latency: 1,
                 remainingLatency: 1 
-            };
-        case 'BEQ':
-            return {
-                ...instruction,
-                resourceUnit: 'BRU',
-                latency: 1,
-                remainingLatency: 1
             };
         default:
             return { 

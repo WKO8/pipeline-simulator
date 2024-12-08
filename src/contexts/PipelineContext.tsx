@@ -5,9 +5,7 @@ import {
     PipelineMetrics, 
     ThreadingMode
 } from '../types/PipelineTypes';
-import { SUPERSCALAR_LIMITS } from '../constants/PipelineConstants';
 import { detectDependencies, assignResourceUnit } from '../utils/PipelineUtils';
-import { countSuperscalarStallsAndBubbles } from '../logic/PipelineLogic';
 import { useForwarding } from './ForwardingContext';
 import { ThreadContext } from "@/types/ThreadContext";
 
@@ -343,137 +341,112 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
             });
         } else {
             setSuperscalarInstructions(prev => {
-                const completedInstructions = prev.filter(inst => inst.stage === 'WB');
-                const withoutCompletedInstructions = prev.filter(inst => inst.stage !== 'WB');
-            
-                const stageOccupancy = {
-                    IF: withoutCompletedInstructions.filter(i => i.stage === 'IF').length,
-                    DE: withoutCompletedInstructions.filter(i => i.stage === 'DE').length,
-                    EXE: withoutCompletedInstructions.filter(i => i.stage === 'EXE').length,
-                    MEM: withoutCompletedInstructions.filter(i => i.stage === 'MEM').length,
-                    WB: withoutCompletedInstructions.filter(i => i.stage === 'WB').length
+                const withoutCompletedInstructions = prev.filter(inst => inst.cycle !== -1);
+                const resourceUnits: {
+                    ALU1: Instruction[];
+                    ALU2: Instruction[];
+                    MUL: Instruction[];
+                    LSU: Instruction[];
+                } = {
+                    ALU1: [],
+                    ALU2: [],
+                    MUL: [],
+                    LSU: []
                 };
             
-                const resourceInUse = {
-                    ALU1: 0,
-                    ALU2: 0,
-                    MUL: 0,
-                    LSU: 0
-                };
+                const cycles: { [key in "ALU1" | "ALU2" | "MUL" | "LSU"]?: number } = {};
             
-                withoutCompletedInstructions
-                    .filter(i => i.stage === 'EXE')
-                    .forEach(i => {
-                        if (i.resourceUnit) {
-                            resourceInUse[i.resourceUnit]++;
+                const updatedInstructions: Instruction[] = [];
+            
+                // Primeiro, tentamos alocar todas as instruções que podem ser executadas em um único ciclo
+                withoutCompletedInstructions.forEach(inst => {
+                    const resourceUnit = inst.resourceUnit;
+            
+                    if (!resourceUnit) {
+                        updatedInstructions.push(inst);
+                        return;
+                    }
+            
+                    // Verifica se a unidade de recurso está ocupada
+                    if (cycles[resourceUnit] && cycles[resourceUnit] > 0) {
+                        updatedInstructions.push(inst); // Retorna a instrução sem alterações
+                        return;
+                    }
+            
+                    // Verifica as dependências
+                    const dependencies = detectDependencies(inst, withoutCompletedInstructions, forwardingEnabled);
+                    const dependenciesResolved = dependencies.length === 0;
+            
+                    if (dependenciesResolved) {
+                        // Se não houver dependências, a instrução pode avançar
+                        const newInst = {
+                            ...inst,
+                            cycle: 1, // Define o ciclo como 1, pois estamos alocando em um único ciclo
+                            dependencies: []
+                        };
+            
+                        // Adiciona a instrução à unidade de recurso correspondente
+                        resourceUnits[resourceUnit].push(newInst);
+                        
+                        // Atualiza o ciclo da unidade de recurso
+                        cycles[resourceUnit] = (cycles[resourceUnit] || 0) + 1; // Incrementa o ciclo da unidade de recurso
+            
+                        updatedInstructions.push(newInst); // Adiciona a nova instrução
+                    } else {
+                        // Se houver dependências, mantém a instrução como está
+                        updatedInstructions.push({
+                            ...inst,
+                            dependencies: dependencies // Atualiza as dependências
+                        });
+                    }
+                });
+            
+                // Agora, verificamos se há instruções na fila de prontas que podem ser alocadas
+                const hasInstructionInCycle1 = updatedInstructions.some(inst => inst.cycle === 1);
+            
+                if (!hasInstructionInCycle1 && superscalarReadyQueue.length > 0) {
+                    const [rawInstructions, remainingQueue] = [
+                        superscalarReadyQueue.filter(i => i.cycle === 0),
+                        superscalarReadyQueue.filter(i => i.cycle !== 0)
+                    ];
+            
+                    // Aloca todas as instruções possíveis em um único ciclo
+                    rawInstructions.forEach(inst => {
+                        const resourceUnit = inst.resourceUnit;
+
+                        if (!resourceUnit) {
+                            updatedInstructions.push(inst);
+                            return;
+                        }
+            
+                        // Verifica se a unidade de recurso está disponível
+                        if (!cycles[resourceUnit] || cycles[resourceUnit] === 0) {
+                            const newInst = {
+                                ...inst,
+                                cycle: 1 // Define o ciclo como 1
+                            };
+                            updatedInstructions.push(newInst);
+                            // Atualiza o ciclo da unidade de recurso
+                            cycles[resourceUnit] = (cycles[resourceUnit] || 0) + 1; // Incrementa o ciclo da unidade de recurso
                         }
                     });
             
-                const { currentStalls, currentBubbles } = countSuperscalarStallsAndBubbles(
-                    withoutCompletedInstructions, 
-                    forwardingEnabled
-                );
-            
-                setTotalStallCycles(prev => prev + currentStalls);
-                setTotalBubbleCycles(prev => prev + currentBubbles);
-            
-                const canMoveToEX = (inst: Instruction) => {
-                    if (!inst.resourceUnit) return false;
-                    const maxUsage = inst.resourceUnit.includes('ALU') ? 2 : 1;
-                    return resourceInUse[inst.resourceUnit] < maxUsage;
-                };
-            
-                const updatedInstructions: Instruction[] = withoutCompletedInstructions.map(inst => {
-                    const currentDependencies = inst.dependencies?.filter(dep => 
-                        withoutCompletedInstructions.some(other => other.value === dep)
-                    );
-            
-                    if (inst.stage === 'EXE') {
-                        if (inst.remainingLatency > 1) {
-                            return { 
-                                ...inst, 
-                                remainingLatency: inst.remainingLatency - 1,
-                                dependencies: currentDependencies 
-                            };
-                        }
-                        if (inst.resourceUnit) {
-                            resourceInUse[inst.resourceUnit]--;
-                        }
-                        return { 
-                            ...inst, 
-                            stage: 'MEM', 
-                            remainingLatency: 0,
-                            dependencies: currentDependencies 
-                        };
-                    }
-            
-                    if (inst.stage === 'DE') {
-                        if (forwardingEnabled) {
-                            const dataAvailable = !currentDependencies?.length;
-                            // Add the canMoveToEX check here
-                            if (dataAvailable && canMoveToEX(inst) && stageOccupancy.EXE < SUPERSCALAR_LIMITS.EX) {
-                                if (inst.resourceUnit) {
-                                    resourceInUse[inst.resourceUnit]++;
-                                }
-                                return { 
-                                    ...inst, 
-                                    stage: 'EXE', 
-                                    remainingLatency: inst.latency,
-                                    dependencies: [] 
-                                };
-                            }
-                        }
-                    }
-            
-                    let nextStage: 'IF' | 'DE' | 'EXE' | 'MEM' | 'WB' = inst.stage;
-                    switch(inst.stage) {
-                        case 'IF': 
-                            nextStage = stageOccupancy.DE < SUPERSCALAR_LIMITS.DE ? 'DE' : 'IF';
-                            break;
-                        case 'MEM': 
-                            nextStage = 'WB';
-                            break;
-                    }
-            
-                    return { 
-                        ...inst, 
-                        stage: nextStage,
-                        dependencies: currentDependencies 
-                    };
-                });
-            
-                setMetrics(prev => ({
-                    totalCycles: cycleCount.current,
-                    completedInstructions: prev.completedInstructions + completedInstructions.length,
-                    stallCycles: totalStallCycles,
-                    bubbleCycles: totalBubbleCycles,
-                    resourceUtilization: {
-                        IF: prev.resourceUtilization.IF + (stageOccupancy.IF > 0 ? 1 : 0),
-                        DE: prev.resourceUtilization.DE + (stageOccupancy.DE > 0 ? 1 : 0),
-                        EXE: prev.resourceUtilization.EXE + (stageOccupancy.EXE > 0 ? 1 : 0),
-                        MEM: prev.resourceUtilization.MEM + (stageOccupancy.MEM > 0 ? 1 : 0),
-                        WB: prev.resourceUtilization.WB + (completedInstructions.length > 0 ? 1 : 0)
-                    }
-                }));
-            
-                const availableSlots = SUPERSCALAR_LIMITS.IF - updatedInstructions.filter(i => i.stage === 'IF').length;
-                if (availableSlots > 0 && superscalarReadyQueue.length > 0) {
-                    const newInstructions = superscalarReadyQueue
-                        .slice(0, availableSlots)
-                        .map(inst => {
-                            const instWithResource = assignResourceUnit(inst);
-                            const dependencies = detectDependencies(instWithResource, updatedInstructions, forwardingEnabled);
-                            return { 
-                                ...instWithResource, 
-                                dependencies, 
-                                stage: 'IF' as const
-                            };
-                        });
-                    setSuperscalarReadyQueue(prev => prev.slice(availableSlots));
-                    return [...updatedInstructions, ...newInstructions];
+                    // Atualiza a fila de prontas
+                    setSuperscalarReadyQueue(remainingQueue);
                 }
             
-                return updatedInstructions;
+                // Repete instruções com dependências que precisam ficar mais de um ciclo
+                const repeatedInstructions = updatedInstructions.flatMap(inst => {
+                    if (inst.dependencies && inst.dependencies.length > 0) {
+                        return Array(inst.remainingLatency).fill({
+                            ...inst,
+                            cycle: (inst.cycle ?? 0) + 1 // Incrementa o ciclo para as repetições
+                        });
+                    }
+                    return inst;
+                });
+            
+                return [...updatedInstructions, ...repeatedInstructions];
             });
         }
     };
