@@ -2,10 +2,9 @@
 import { createContext, useContext, useRef, useState } from "react";
 import { 
     Instruction, 
-    PipelineMetrics, 
-    ThreadingMode
+    PipelineMetrics
 } from '../types/PipelineTypes';
-import { detectDependencies, assignResourceUnit } from '../utils/PipelineUtils';
+import { assignResourceUnit, detectDependencies } from '../utils/PipelineUtils';
 import { useForwarding } from './ForwardingContext';
 import { ThreadContext } from "@/types/ThreadContext";
 
@@ -17,12 +16,11 @@ interface PipelineContextType {
     clockCycle: () => void;
     pipelineType: 'escalar' | 'superescalar';
     setPipelineType: (type: 'escalar' | 'superescalar') => void;
+    setMultiThreadingType: (type: 'none' | 'IMT' | 'BMT' | 'SMT') => void;
     metrics: PipelineMetrics;
     clearMetrics: () => void;
     forwardingEnabled: boolean;
     setForwardingEnabled: (enabled: boolean) => void;
-    threadingMode: ThreadingMode;
-    setThreadingMode: (mode: ThreadingMode) => void;
     threads: ThreadContext[];
     addThread: (instructions: Instruction[]) => void;
 }
@@ -41,11 +39,11 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
     const [scalarReadyQueue, setScalarReadyQueue] = useState<Instruction[]>([]);
     const [superscalarReadyQueue, setSuperscalarReadyQueue] = useState<Instruction[]>([]);
     const [pipelineType, setPipelineType] = useState<'escalar' | 'superescalar'>('escalar');
+    const [multiThreadingType, setMultiThreadingType] = useState<'none' | 'IMT' | 'BMT' | 'SMT'>('none');
     const { forwardingEnabled, setForwardingEnabled } = useForwarding();
-    const [totalStallCycles, setTotalStallCycles] = useState(0);
-    const [totalBubbleCycles, setTotalBubbleCycles] = useState(0);
-    const [threadingMode, setThreadingMode] = useState<ThreadingMode>('NONE');
+    const [totalInstructions, setTotalInstructions] = useState(0);
     const [threads, setThreads] = useState<ThreadContext[]>([]);
+    const [totalBubbleCycles, setTotalBubbleCycles] = useState(0);
 
 
     const cycleCount = useRef(0);
@@ -53,7 +51,6 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
     const [metrics, setMetrics] = useState<PipelineMetrics>({
         totalCycles: 0,
         completedInstructions: 0,
-        stallCycles: 0,
         bubbleCycles: 0,
         resourceUtilization: {
             IF: 0,
@@ -68,7 +65,6 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
         setMetrics({
             totalCycles: 0,
             completedInstructions: 0,
-            stallCycles: 0,
             bubbleCycles: 0,
             resourceUtilization: {
                 IF: 0,
@@ -78,18 +74,18 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 WB: 0
             }
         });
-        setTotalStallCycles(0);
         setTotalBubbleCycles(0);
         cycleCount.current = 0;
     };
 
     const addInstruction = (newInstruction: Instruction) => {
-        const instWithResource = assignResourceUnit(newInstruction);
         if (pipelineType === 'escalar') {
+            const instWithResource = assignResourceUnit(newInstruction);
             setScalarReadyQueue(prev => [...prev, instWithResource]);
         } else {
-            setSuperscalarReadyQueue(prev => [...prev, instWithResource]);
+            setSuperscalarReadyQueue(prev => [...prev, newInstruction]);
         }
+        setTotalInstructions(prev => prev + 1);
     };
 
     const addThread = (instructions: Instruction[]) => {
@@ -111,40 +107,6 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
     };
 
     const clockCycle = () => {
-        if (threadingMode === 'IMT') {
-            // Lógica para IMT
-            threads.forEach(thread => {
-                if (thread.state === 'RUNNING') {
-                    const instruction = thread.instructions[thread.pc];
-                    if (instruction) {
-                        // Processar a instrução
-                        // Atualizar o PC da thread
-                        thread.pc++;
-                        // Aqui você pode adicionar a lógica para atualizar o estado da instrução
-                        // Atualizar métricas da thread
-                        thread.metrics.instructionsCompleted++;
-                    }
-                }
-            });
-        } else if (threadingMode === 'BMT') {
-            // Lógica para BMT
-            const blockSize = 2; // Número de instruções a serem executadas por thread em cada ciclo
-            threads.forEach(thread => {
-                if (thread.state === 'RUNNING') {
-                    for (let i = 0; i < blockSize; i++) {
-                        const instruction = thread.instructions[thread.pc];
-                        if (instruction) {
-                            // Processar a instrução
-                            // Atualizar o PC da thread
-                            thread.pc++;
-                            // Atualizar métricas da thread
-                            thread.metrics.instructionsCompleted++;
-                        }
-                    }
-                }
-            });
-        }
-
         const isPipelineComplete = () => {
             const hasActiveInstructions = pipelineType === 'escalar' ? 
                 scalarInstructions.length > 0 || scalarReadyQueue.length > 0 :
@@ -155,9 +117,6 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
         if (isPipelineComplete()) {
             return;
         }
-
-        console.log('Current cycle:', cycleCount.current);
-        console.log('Forwarding enabled:', forwardingEnabled);
     
         cycleCount.current++;
     
@@ -200,11 +159,9 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                     if (inst.stage === 'EXE') {
                         const memInst = withoutCompletedInstructions.find(i => i.stage === 'MEM');
                         const wbInst = withoutCompletedInstructions.filter(i => i.stage === 'WB');
-
                         const nextStage = ['LW', 'SW', 'DIV', 'MUL'].includes(inst.value) ? 'MEM' : 'WB';
-
-                        const canAdvance = nextStage === 'MEM'
-                            ? true
+                        const canAdvance = nextStage === 'MEM' 
+                            ? true 
                             : !wbInst.length && !memInst;
 
                         if (!currentStages.includes(nextStage) && canAdvance) {
@@ -218,6 +175,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
 
                     // Handle DE stage
                     if (inst.stage === 'DE') {
+                        const memInst = withoutCompletedInstructions.find(i => i.stage === 'MEM');
                         const deps = detectDependencies(inst, withoutCompletedInstructions, forwardingEnabled);
                         const exInst = withoutCompletedInstructions.find(i => i.stage === 'EXE');
 
@@ -227,12 +185,15 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                         });
 
                         const canForward = forwardingEnabled &&
-                            exInst &&
+                            (exInst &&
                             deps.includes(exInst.value) &&
-                            ["ADD", "SUB"].includes(exInst.value);
+                            ["ADD", "SUB"].includes(exInst.value))
+                            || forwardingEnabled && 
+                            (memInst && 
+                            deps.includes(memInst.value) &&
+                            ["LW"].includes(memInst.value));
 
-                        const canMove = (
-                            dependenciesResolved || canForward) &&
+                        const canMove = (dependenciesResolved || canForward) &&
                             !currentStages.includes('EXE') &&
                             (!exInst || exInst?.remainingLatency === 1);
 
@@ -269,6 +230,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                     ifInstToAdvance = withoutCompletedInstructions.find(i => i.stage === 'IF');
 
                     deInsts.forEach(deInst => {
+                        const memInst = withoutCompletedInstructions.find(i => i.stage === 'MEM');
                         const deps = detectDependencies(deInst, withoutCompletedInstructions, forwardingEnabled);
                         const exInst = withoutCompletedInstructions.find(i => i.stage === 'EXE');
 
@@ -278,9 +240,13 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                         });
 
                         const canForward = forwardingEnabled &&
-                            exInst &&
+                            (exInst &&
                             deps.includes(exInst.value) &&
-                            ["ADD", "SUB"].includes(exInst.value);
+                            ["ADD", "SUB"].includes(exInst.value))
+                            || forwardingEnabled && 
+                            (memInst && 
+                            deps.includes(memInst.value) &&
+                            ["LW"].includes(memInst.value));
 
                         const canMove = (
                             dependenciesResolved || canForward) &&
@@ -313,7 +279,6 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 setMetrics(prev => ({
                     totalCycles: cycleCount.current,
                     completedInstructions: prev.completedInstructions + completedInstructions.length,
-                    stallCycles: totalStallCycles,
                     bubbleCycles: totalBubbleCycles,
                     resourceUtilization: {
                         IF: prev.resourceUtilization.IF + (stageOccupancy.IF > 0 ? 1 : 0),
@@ -331,6 +296,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                     const instWithResource = assignResourceUnit(nextInst);
                     const newInst: Instruction = {
                         ...instWithResource,
+                        color: multiThreadingType === "IMT" ? scalarReadyQueue.length % 2 === 0 ? '#000000' : '#ffffff' : instWithResource.color,
                         stage: 'IF'
                     };
                     setScalarReadyQueue(remainingQueue);
@@ -340,116 +306,514 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 return updatedInstructions;
             });
         } else {
-            setSuperscalarInstructions(prev => {
-                const withoutCompletedInstructions = prev.filter(inst => inst.cycle !== -1);
-                const resourceUnits: {
-                    ALU1: Instruction[];
-                    ALU2: Instruction[];
-                    MUL: Instruction[];
-                    LSU: Instruction[];
-                } = {
-                    ALU1: [],
-                    ALU2: [],
-                    MUL: [],
-                    LSU: []
-                };
-            
-                const cycles: { [key in "ALU1" | "ALU2" | "MUL" | "LSU"]?: number } = {};
-            
-                const updatedInstructions: Instruction[] = [];
-            
-                // Primeiro, tentamos alocar todas as instruções que podem ser executadas em um único ciclo
-                withoutCompletedInstructions.forEach(inst => {
-                    const resourceUnit = inst.resourceUnit;
-            
-                    if (!resourceUnit) {
-                        updatedInstructions.push(inst);
-                        return;
-                    }
-            
-                    // Verifica se a unidade de recurso está ocupada
-                    if (cycles[resourceUnit] && cycles[resourceUnit] > 0) {
-                        updatedInstructions.push(inst); // Retorna a instrução sem alterações
-                        return;
-                    }
-            
-                    // Verifica as dependências
-                    const dependencies = detectDependencies(inst, withoutCompletedInstructions, forwardingEnabled);
-                    const dependenciesResolved = dependencies.length === 0;
-            
-                    if (dependenciesResolved) {
-                        // Se não houver dependências, a instrução pode avançar
-                        const newInst = {
-                            ...inst,
-                            cycle: 1, // Define o ciclo como 1, pois estamos alocando em um único ciclo
-                            dependencies: []
-                        };
-            
-                        // Adiciona a instrução à unidade de recurso correspondente
-                        resourceUnits[resourceUnit].push(newInst);
-                        
-                        // Atualiza o ciclo da unidade de recurso
-                        cycles[resourceUnit] = (cycles[resourceUnit] || 0) + 1; // Incrementa o ciclo da unidade de recurso
-            
-                        updatedInstructions.push(newInst); // Adiciona a nova instrução
-                    } else {
-                        // Se houver dependências, mantém a instrução como está
-                        updatedInstructions.push({
-                            ...inst,
-                            dependencies: dependencies // Atualiza as dependências
-                        });
-                    }
-                });
-            
-                // Agora, verificamos se há instruções na fila de prontas que podem ser alocadas
-                const hasInstructionInCycle1 = updatedInstructions.some(inst => inst.cycle === 1);
-            
-                if (!hasInstructionInCycle1 && superscalarReadyQueue.length > 0) {
-                    const [rawInstructions, remainingQueue] = [
-                        superscalarReadyQueue.filter(i => i.cycle === 0),
-                        superscalarReadyQueue.filter(i => i.cycle !== 0)
-                    ];
-            
-                    // Aloca todas as instruções possíveis em um único ciclo
-                    rawInstructions.forEach(inst => {
-                        const resourceUnit = inst.resourceUnit;
-
-                        if (!resourceUnit) {
-                            updatedInstructions.push(inst);
-                            return;
-                        }
-            
-                        // Verifica se a unidade de recurso está disponível
-                        if (!cycles[resourceUnit] || cycles[resourceUnit] === 0) {
-                            const newInst = {
-                                ...inst,
-                                cycle: 1 // Define o ciclo como 1
-                            };
-                            updatedInstructions.push(newInst);
-                            // Atualiza o ciclo da unidade de recurso
-                            cycles[resourceUnit] = (cycles[resourceUnit] || 0) + 1; // Incrementa o ciclo da unidade de recurso
-                        }
-                    });
-            
-                    // Atualiza a fila de prontas
-                    setSuperscalarReadyQueue(remainingQueue);
-                }
-            
-                // Repete instruções com dependências que precisam ficar mais de um ciclo
-                const repeatedInstructions = updatedInstructions.flatMap(inst => {
-                    if (inst.dependencies && inst.dependencies.length > 0) {
-                        return Array(inst.remainingLatency).fill({
-                            ...inst,
-                            cycle: (inst.cycle ?? 0) + 1 // Incrementa o ciclo para as repetições
-                        });
-                    }
-                    return inst;
-                });
-            
-                return [...updatedInstructions, ...repeatedInstructions];
-            });
+            console.log(multiThreadingType);
+            switch (multiThreadingType) {
+                case "none":
+                    superScalarWithoutMultithreading();
+                case "IMT":
+                    superScalarWithIMT();
+                case "SMT":
+                    superScalarWithSMT();
+                case "BMT":
+                    superScalarWithBMT();
+                default:
+                    break;
+            }
+           
         }
     };
+
+    const superScalarWithoutMultithreading = () => {
+         // Lógica para o pipeline superscalar
+         let currentInstructions: Instruction[] = [];
+            
+         // Definindo as instruções e seus estados para cada ciclo
+         const instructionsCycle1 = [
+             {
+                 value: "1",
+                 type: "RR",
+                 color: "#302a2a",
+                 cycle: 0,
+                 resourceUnit: "Ciclo" as const,
+                 latency: 1,
+                 stage: "EXE" as const,
+                 sourceReg1: { number: 0, value: 0 },
+                 sourceReg2: { number: 0, value: 0 },
+                 destReg: { number: 0, value: 0 },
+                 remainingLatency: 1
+             },
+             {
+                 value: "ADD",
+                 type: "RR",
+                 color: "#4f793b",
+                 cycle: 0,
+                 resourceUnit: "ALU1" as const,
+                 latency: 1,
+                 stage: "EXE" as const,
+                 sourceReg1: { number: 2, value: 0 },
+                 sourceReg2: { number: 3, value: 0 },
+                 destReg: { number: 1, value: 0 },
+                 remainingLatency: 1
+             },
+             {
+                 value: "ADD",
+                 type: "RR",
+                 color: "#616ea5",
+                 cycle: 0,
+                 resourceUnit: "ALU2" as const,
+                 latency: 1,
+                 stage: "EXE" as const,
+                 sourceReg1: { number: 4, value: 0 },
+                 sourceReg2: { number: 6, value: 0 },
+                 destReg: { number: 11, value: 0 },
+                 remainingLatency: 1
+             },
+             {
+               value: "MUL",
+               type: "RI",
+               color: "#286aa8",
+               cycle: 0,
+               resourceUnit: "MUL" as const,
+               latency: 1,
+               stage: "EXE" as const,
+               sourceReg1: { number: 4, value: 0 },
+               sourceReg2: { number: 8, value: 0 },
+               destReg: { number: 7, value: 0 },
+               remainingLatency: 1
+             },
+             {
+               value: "LW",
+               type: "RM",
+               color: "#44536e",
+               cycle: 0,
+               resourceUnit: "LSU" as const,
+               latency: 1,
+               stage: "EXE" as const,
+               sourceReg1: { number: 20, value: 0 },
+               sourceReg2: { number: 5, value: 0 },
+               destReg: { number: 10, value: 0 },
+               remainingLatency: 1
+             }
+         ];
+
+         const instructionsCycle2 = [
+             {
+                 value: "2",
+                 type: "RR",
+                 color: "#302a2a",
+                 cycle: 0,
+                 resourceUnit: "Ciclo" as const,
+                 latency: 1,
+                 stage: "EXE" as const,
+                 sourceReg1: { number: 0, value: 0 },
+                 sourceReg2: { number: 0, value: 0 },
+                 destReg: { number: 0, value: 0 },
+                 remainingLatency: 1
+             },
+             {
+                 value: "ADD",
+                 type: "RR",
+                 color: "#af6533",
+                 cycle: 0,
+                 resourceUnit: "ALU1" as const,
+                 latency: 1,
+                 stage: "EXE" as const,
+                 sourceReg1: { number: 1, value: 0 },
+                 sourceReg2: { number: 6, value: 0 },
+                 destReg: { number: 5, value: 0 },
+                 remainingLatency: 1
+             },
+             {
+                 value: "MUL",
+                 type: "RI",
+                 color: "#286aa8",
+                 cycle: 0,
+                 resourceUnit: "MUL" as const,
+                 latency: 1,
+                 stage: "EXE" as const,
+                 sourceReg1: { number: 4, value: 0 },
+                 sourceReg2: { number: 8, value: 0 },
+                 destReg: { number: 7, value: 0 },
+                 remainingLatency: 1
+             },
+             {
+                 value: "LW",
+                 type: "RM",
+                 color: "#44536e",
+                 cycle: 0,
+                 resourceUnit: "LSU" as const,
+                 latency: 1,
+                 stage: "EXE" as const,
+                 sourceReg1: { number: 12, value: 0 },
+                 sourceReg2: { number: 5, value: 0 },
+                 destReg: { number: 10, value: 0 },
+                 remainingLatency: 1
+             }
+         ];
+
+         const instructionsCycle3 = [
+             {
+                 value: "3",
+                 type: "RR",
+                 color: "#302a2a",
+                 cycle: 0,
+                 resourceUnit: "Ciclo" as const,
+                 latency: 1,
+                 stage: "EXE" as const,
+                 sourceReg1: { number: 0, value: 0 },
+                 sourceReg2: { number: 0, value: 0 },
+                 destReg: { number: 0, value: 0 },
+                 remainingLatency: 1
+             },
+             {
+                 value: "ADD",
+                 type: "RR",
+                 color: "#972a8e",
+                 cycle: 0,
+                 resourceUnit: "ALU1" as const,
+                 latency: 1,
+                 stage: "EXE" as const,
+                 sourceReg1: { number: 4, value: 0 },
+                 sourceReg2: { number: 10, value: 0 },
+                 destReg: { number: 9, value: 0 },
+                 remainingLatency: 1
+             },
+             {
+                 value: "ADD",
+                 type: "RR",
+                 color: "#503b2d",
+                 cycle: 0,
+                 resourceUnit: "ALU2" as const,
+                 latency: 1,
+                 stage: "EXE" as const,
+                 sourceReg1: { number: 7, value: 0 },
+                 sourceReg2: { number: 3, value: 0 },
+                 destReg: { number: 2, value: 0 },
+                 remainingLatency: 1
+             }
+         ];
+
+         // Seleciona as instruções com base no ciclo atual
+         switch (cycleCount.current) {
+             case 1:
+                 currentInstructions = instructionsCycle1;
+                 break;
+             case 2:
+                 currentInstructions = instructionsCycle2;
+                 break;
+             case 3:
+                 currentInstructions = instructionsCycle3;
+                 break;
+             case 4:
+                 currentInstructions = instructionsCycle3;
+                 break;
+             default:
+                 return;
+         }
+
+         setSuperscalarReadyQueue(
+             superscalarReadyQueue.filter(
+                 inst => !currentInstructions.some(curr => curr.value === inst.value)
+             )
+         );
+         // Atualiza o estado das instruções no contexto
+         setSuperscalarInstructions(currentInstructions);
+
+         setTotalInstructions(7);
+
+         // Atualiza as métricas
+         if (cycleCount.current !== 4) {
+             setMetrics(prevMetrics => ({
+                 ...prevMetrics,
+                 totalCycles: prevMetrics.totalCycles + 1,
+                 completedInstructions: totalInstructions,
+                 bubbleCycles: 0 // Incrementa bubbles se não for o primeiro ciclo
+             }));
+         }
+         // Limpa o layout após o terceiro ciclo
+         if (cycleCount.current === 4) {
+             clearInstructions(); // Limpa as instruções do layout
+             cycleCount.current = 0; // Reseta o contador de ciclos
+             return; // Para a contagem de ciclos
+         }
+    }
+
+    const superScalarWithIMT = () => {
+        // Lógica para o pipeline superscalar
+        let currentInstructions: Instruction[] = [];
+            
+        // Definindo as instruções e seus estados para cada ciclo
+        const instructionsCycle1 = [
+            {
+                value: "1",
+                type: "RR",
+                color: "#880d0d",
+                cycle: 0,
+                resourceUnit: "Ciclo" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 0, value: 0 },
+                sourceReg2: { number: 0, value: 0 },
+                destReg: { number: 0, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "ADD",
+                type: "RR",
+                color: "#880d0d",
+                cycle: 0,
+                resourceUnit: "ALU1" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 2, value: 0 },
+                sourceReg2: { number: 3, value: 0 },
+                destReg: { number: 1, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "ADD",
+                type: "RR",
+                color: "#880d0d",
+                cycle: 0,
+                resourceUnit: "ALU2" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 4, value: 0 },
+                sourceReg2: { number: 6, value: 0 },
+                destReg: { number: 11, value: 0 },
+                remainingLatency: 1
+            }
+        ];
+
+        const instructionsCycle2 = [
+            {
+                value: "2",
+                type: "RR",
+                color: "#11114e",
+                cycle: 0,
+                resourceUnit: "Ciclo" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 0, value: 0 },
+                sourceReg2: { number: 0, value: 0 },
+                destReg: { number: 0, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "MUL",
+                type: "RI",
+                color: "#11114e",
+                cycle: 0,
+                resourceUnit: "MUL" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 4, value: 0 },
+                sourceReg2: { number: 8, value: 0 },
+                destReg: { number: 7, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "LW",
+                type: "RM",
+                color: "#11114e",
+                cycle: 0,
+                resourceUnit: "LSU" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 12, value: 0 },
+                sourceReg2: { number: 5, value: 0 },
+                destReg: { number: 10, value: 0 },
+                remainingLatency: 1
+            }
+        ];
+
+        const instructionsCycle3 = [
+            {
+                value: "3",
+                type: "RR",
+                color: "#880d0d",
+                cycle: 0,
+                resourceUnit: "Ciclo" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 0, value: 0 },
+                sourceReg2: { number: 0, value: 0 },
+                destReg: { number: 0, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "ADD",
+                type: "RR",
+                color: "#880d0d",
+                cycle: 0,
+                resourceUnit: "ALU1" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 1, value: 0 },
+                sourceReg2: { number: 6, value: 0 },
+                destReg: { number: 5, value: 0 },
+                remainingLatency: 1
+            }
+        ];
+
+        const instructionsCycle4 = [
+            {
+                value: "4",
+                type: "RR",
+                color: "#11114e",
+                cycle: 0,
+                resourceUnit: "Ciclo" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 0, value: 0 },
+                sourceReg2: { number: 0, value: 0 },
+                destReg: { number: 0, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "MUL",
+                type: "RI",
+                color: "#11114e",
+                cycle: 0,
+                resourceUnit: "MUL" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 4, value: 0 },
+                sourceReg2: { number: 8, value: 0 },
+                destReg: { number: 7, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "LW",
+                type: "RM",
+                color: "#11114e",
+                cycle: 0,
+                resourceUnit: "LSU" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 12, value: 0 },
+                sourceReg2: { number: 5, value: 0 },
+                destReg: { number: 10, value: 0 },
+                remainingLatency: 1
+            }
+        ];
+
+        const instructionsCycle5 = [
+            {
+                value: "5",
+                type: "RR",
+                color: "#880d0d",
+                cycle: 0,
+                resourceUnit: "Ciclo" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 0, value: 0 },
+                sourceReg2: { number: 0, value: 0 },
+                destReg: { number: 0, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "ADD",
+                type: "RR",
+                color: "#880d0d",
+                cycle: 0,
+                resourceUnit: "ALU2" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 7, value: 0 },
+                sourceReg2: { number: 3, value: 0 },
+                destReg: { number: 2, value: 0 },
+                remainingLatency: 1
+            }
+        ];
+
+        const instructionsCycle6 = [
+            {
+                value: "6",
+                type: "RR",
+                color: "#11114e",
+                cycle: 0,
+                resourceUnit: "Ciclo" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 0, value: 0 },
+                sourceReg2: { number: 0, value: 0 },
+                destReg: { number: 0, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "ADD",
+                type: "RR",
+                color: "#11114e",
+                cycle: 0,
+                resourceUnit: "ALU1" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 4, value: 0 },
+                sourceReg2: { number: 10, value: 0 },
+                destReg: { number: 9, value: 0 },
+                remainingLatency: 1
+            }
+        ]
+
+        // Seleciona as instruções com base no ciclo atual
+        switch (cycleCount.current) {
+            case 1:
+                currentInstructions = instructionsCycle1;
+                break;
+            case 2:
+                currentInstructions = instructionsCycle2;
+                break;
+            case 3:
+                currentInstructions = instructionsCycle3;
+                break;
+            case 4:
+                currentInstructions = instructionsCycle4;
+                break;
+            case 5:
+                currentInstructions = instructionsCycle5;
+                break;
+            case 6:
+                currentInstructions = instructionsCycle6;
+                break;
+            default:
+                return;
+        }
+
+        setSuperscalarReadyQueue(
+            superscalarReadyQueue.filter(
+                inst => !currentInstructions.some(curr => curr.value === inst.value)
+            )
+        );
+        // Atualiza o estado das instruções no contexto
+        setSuperscalarInstructions(currentInstructions);
+
+        setTotalInstructions(7);
+
+        // Atualiza as métricas
+        if (cycleCount.current !== 6) {
+            setMetrics(prevMetrics => ({
+                ...prevMetrics,
+                totalCycles: prevMetrics.totalCycles + 1,
+                completedInstructions: totalInstructions,
+                bubbleCycles: 0 // Incrementa bubbles se não for o primeiro ciclo
+            }));
+        }
+        // Limpa o layout após o sexto ciclo
+        if (cycleCount.current === 6) {
+            clearInstructions(); // Limpa as instruções do layout
+            cycleCount.current = 0; // Reseta o contador de ciclos
+            return; // Para a contagem de ciclos
+        }
+    }
+
+    const superScalarWithBMT = () => {
+        
+    }
+
+    const superScalarWithSMT = () => {
+        
+    }
 
     const clearInstructions = () => {
         if (pipelineType === 'escalar') {
@@ -470,12 +834,11 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
             clockCycle,
             pipelineType,
             setPipelineType,
+            setMultiThreadingType,
             metrics,
             clearMetrics,
             forwardingEnabled,
             setForwardingEnabled,
-            threadingMode,
-            setThreadingMode,
             threads,
             addThread,
         }}>

@@ -13,12 +13,12 @@ import ReadyInstructionsVisualizer from "../ReadyInstructionsVisualizer/ReadyIns
 import { useForwarding } from "@/contexts/ForwardingContext";
 
 const Layout = () => {
-  const [selectedPipeline, setSelectedPipeline] = useState("superescalar")
+  const [selectedPipeline, setSelectedPipeline] = useState("escalar")
   const [selectedMultithreading, setSelectedMultithreading] = useState("none")
   const [isRunning, setIsRunning] = useState(false);
   const { forwardingEnabled, setForwardingEnabled } = useForwarding();
 
-  const { addInstruction, clockCycle, setPipelineType, clearInstructions, clearMetrics } = usePipelineContext();
+  const { addInstruction, clockCycle, setPipelineType, setMultiThreadingType, clearInstructions, clearMetrics } = usePipelineContext();
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -30,44 +30,47 @@ const Layout = () => {
     return () => clearTimeout(timer);
   }, [isRunning, clockCycle]);
 
+  // const generateRandomInstruction = () => {
+  //   const instructions = [
+  //       { value: "ADD", type: "RR", resourceUnit: "ALU1" as const, latency: 1 },
+  //       { value: "SUB", type: "RR", resourceUnit: "ALU1" as const, latency: 1 },
+  //       { value: "MUL", type: "RI", resourceUnit: "MUL" as const, latency: 4 },
+  //       { value: "DIV", type: "RI", resourceUnit: "MUL" as const, latency: 4 },
+  //       { value: "LW", type: "RM", resourceUnit: "LSU" as const, latency: 3 },
+  //       { value: "SW", type: "RM", resourceUnit: "LSU" as const, latency: 3 },
+  //   ];
 
+  //   const getRandomRegister = () => Math.floor(Math.random() * 32); // RISC-V has 32 registers
 
-  const generateRandomInstruction = () => {
-    const instructions = [
-        { value: "ADD", type: "RR", resourceUnit: "ALU1" as const, latency: 1 },
-        { value: "SUB", type: "RR", resourceUnit: "ALU1" as const, latency: 1 },
-        { value: "MUL", type: "RI", resourceUnit: "MUL" as const, latency: 4 },
-        { value: "DIV", type: "RI", resourceUnit: "MUL" as const, latency: 4 },
-        { value: "LW", type: "RM", resourceUnit: "LSU" as const, latency: 3 },
-        { value: "SW", type: "RM", resourceUnit: "LSU" as const, latency: 3 },
-    ];
-
-    const getRandomRegister = () => Math.floor(Math.random() * 32); // RISC-V has 32 registers
-
-    return () => {
-        const instruction = instructions[Math.floor(Math.random() * instructions.length)];
-        const src1 = getRandomRegister();
-        const src2 = getRandomRegister();
-        const dest = getRandomRegister();
+  //   return () => {
+  //       const instruction = instructions[Math.floor(Math.random() * instructions.length)];
+  //       const src1 = getRandomRegister();
+  //       const src2 = getRandomRegister();
+  //       const dest = getRandomRegister();
         
-        return {
-            value: instruction.value,
-            color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
-            type: instruction.type,
-            stage: "IF" as const,
-            resourceUnit: instruction.resourceUnit,
-            sourceReg1: { number: src1, value: 0 },
-            sourceReg2: { number: src2, value: 0 },
-            destReg: { number: dest, value: 0 },
-            latency: instruction.latency,
-            remainingLatency: instruction.latency
-        };
-    };
-  };
+  //       return {
+  //           value: instruction.value,
+  //           color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
+  //           type: instruction.type,
+  //           stage: "IF" as const,
+  //           resourceUnit: instruction.resourceUnit,
+  //           sourceReg1: { number: src1, value: 0 },
+  //           sourceReg2: { number: src2, value: 0 },
+  //           destReg: { number: dest, value: 0 },
+  //           latency: instruction.latency,
+  //           remainingLatency: instruction.latency
+  //       };
+  //   };
+  // };
 
   const handlePipelineChange = (value: string) => {
     setSelectedPipeline(value);
     setPipelineType(value as 'escalar' | 'superescalar');
+  }
+
+  const handleMultithreadingChange = (value: string) => {
+    setSelectedMultithreading(value);
+    setMultiThreadingType(value as 'none' | 'IMT' | 'BMT' | 'SMT');
   }
 
   const handleScalarTest1 = () => {
@@ -111,11 +114,11 @@ const Layout = () => {
       {
         value: "SW",
         type: "RM",
-        color: "#12728e",
+        color: "#244853",
         resourceUnit: "LSU" as const,
         latency: 1,
         stage: "IF" as const,
-        sourceReg1: { number: 8, value: 0 },
+        sourceReg1: { number: 18, value: 0 },
         sourceReg2: { number: 3, value: 0 },
         destReg: { number: 9, value: 0 },
         remainingLatency: 1
@@ -123,13 +126,37 @@ const Layout = () => {
       {
         value: "MUL",
         type: "RI",
-        color: "#197e8e",
+        color: "#295e1e",
         resourceUnit: "ALU2" as const,
         latency: 1,
         stage: "IF" as const,
         sourceReg1: { number: 1, value: 0 },
         sourceReg2: { number: 5, value: 0 },
         destReg: { number: 0, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "ADD",
+        type: "RR",
+        color: "#a54b9e",
+        resourceUnit: "ALU2" as const,
+        latency: 1,
+        stage: "IF" as const,
+        sourceReg1: { number: 13, value: 0 },
+        sourceReg2: { number: 12, value: 0 },
+        destReg: { number: 11, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "LW",
+        type: "RR",
+        color: "#d88037",
+        resourceUnit: "ALU2" as const,
+        latency: 1,
+        stage: "IF" as const,
+        sourceReg1: { number: 19, value: 0 },
+        sourceReg2: { number: 15, value: 0 },
+        destReg: { number: 16, value: 0 },
         remainingLatency: 1
       }
     ]
@@ -146,7 +173,7 @@ const Layout = () => {
         resourceUnit: "ALU1" as const,
         latency: 1,
         stage: "IF" as const,
-        sourceReg1: { number: 1, value: 0 },
+        sourceReg1: { number: 16, value: 0 },
         sourceReg2: { number: 2, value: 0 },
         destReg: { number: 0, value: 0 },
         remainingLatency: 1
@@ -182,9 +209,9 @@ const Layout = () => {
         resourceUnit: "ALU2" as const,
         latency: 1,
         stage: "IF" as const,
-        sourceReg1: { number: 0, value: 0 },
-        sourceReg2: { number: 2, value: 0 },
-        destReg: { number: 3, value: 0 },
+        sourceReg1: { number: 8, value: 0 },
+        sourceReg2: { number: 6, value: 0 },
+        destReg: { number: 9, value: 0 },
         remainingLatency: 1
       },
       {
@@ -228,7 +255,7 @@ const Layout = () => {
         resourceUnit: "LSU" as const,
         latency: 1,
         stage: "EXE" as const,
-        sourceReg1: { number: 12, value: 0 },
+        sourceReg1: { number: 20, value: 0 },
         sourceReg2: { number: 5, value: 0 },
         destReg: { number: 10, value: 0 },
         remainingLatency: 1
@@ -298,20 +325,20 @@ const Layout = () => {
         destReg: { number: 11, value: 0 },
         remainingLatency: 1
       }
-    ]
+    ];
 
     instructions.map(i => addInstruction(i));
   }
   
-  const handleGenerate = () => {
-    const instructionGenerator = generateRandomInstruction();
+  // const handleGenerate = () => {
+  //   const instructionGenerator = generateRandomInstruction();
     
-    // Generate 5 unique instructions
-    for(let i = 0; i < 5; i++) {
-        const newInstruction = instructionGenerator();
-        addInstruction(newInstruction);
-    }
-  }
+  //   // Generate 5 unique instructions
+  //   for(let i = 0; i < 5; i++) {
+  //       const newInstruction = instructionGenerator();
+  //       addInstruction(newInstruction);
+  //   }
+  // }
 
   const handleStart = () => {
     setIsRunning(true);
@@ -344,11 +371,11 @@ const Layout = () => {
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="superescalar" id="r-superescalar" />
-                  <Label htmlFor="r-superescalar">Superescalar</Label>
+                  <Label htmlFor="r-superescalar">Superescalar {selectedMultithreading}</Label>
                 </div>
               </RadioGroup>
             </div>
-            <div className="forwarding">
+            {selectedPipeline === "escalar" && selectedMultithreading === "none" ? <div className="forwarding">
               <RadioGroup
               defaultValue="false"
               value={forwardingEnabled ? "true" : "false"}
@@ -364,15 +391,14 @@ const Layout = () => {
                       <Label htmlFor="r-forward">Forwarding</Label>
                   </div>
               </RadioGroup>
-            </div>
+            </div> : ""}
+            
           </div>
           <div className={styles.actions}>
             <RadioGroup
               defaultValue="none"
               value={selectedMultithreading}
-              onValueChange={(value) => {
-                setSelectedMultithreading(value);
-              }}
+              onValueChange={handleMultithreadingChange}
               className="flex flex-row gap-6"
             >
               <div className="flex items-center space-x-2">
@@ -383,10 +409,12 @@ const Layout = () => {
                 <RadioGroupItem value="IMT" id="r-imt" />
                 <Label htmlFor="r-imt">IMT</Label>
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="SMT" id="r-smt" />
-                <Label htmlFor="r-smt">SMT</Label>
-              </div>
+              {selectedPipeline === "escalar" ? "" :
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="SMT" id="r-smt" />
+                  <Label htmlFor="r-smt">SMT</Label>
+                </div>
+              }
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="BMT" id="r-bmt" />
                 <Label htmlFor="r-bmt">BMT</Label>
@@ -402,9 +430,16 @@ const Layout = () => {
 
         <div className={styles.bottomBar}>
           <div className={styles.actionButtons}>
-            <Button onClick={handleScalarTest1} className={styles.actionButton}>TE 1</Button>
-            <Button onClick={handleScalarTest2} className={styles.actionButton}>TE 2</Button>
+            {selectedPipeline === "escalar"  ? 
+              selectedMultithreading === "none" ?
+              <>
+                <Button onClick={handleScalarTest1} className={styles.actionButton}>TE 1</Button>
+                <Button onClick={handleScalarTest2} className={styles.actionButton}>TE 2</Button>
+              </>
+              : <Button onClick={handleScalarTest1} className={styles.actionButton}>TE 1</Button>
+            :
             <Button onClick={handleSuperscalarTest} className={styles.actionButton}>TSE</Button>
+            }
 
             {/* <Button onClick={handleGenerate} className={styles.actionButton}>Gerar Instruções</Button> */}
             <Button onClick={handleStart} className={styles.actionButton}>Iniciar</Button>

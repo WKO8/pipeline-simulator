@@ -16,7 +16,7 @@ const GridSuperescalar = () => {
                           .map((inst, index) => (
                               <Instruction 
                                   key={index}
-                                  value={`${inst.value} (${inst.resourceUnit})`}
+                                  value={inst.value}
                                   color={inst.color}
                                   type="superescalar"
                                   dependencies={inst.dependencies}

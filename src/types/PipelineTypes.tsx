@@ -16,7 +16,7 @@ export interface Instruction {
     color: string;
     type: string;
     stage: 'IF' | 'DE' | 'EXE' | 'MEM' | 'WB';
-    resourceUnit?: 'ALU1' | 'ALU2' | 'MUL' | 'LSU';
+    resourceUnit?: 'Ciclo' | 'ALU1' | 'ALU2' | 'MUL' | 'LSU';
     cycle?: number;
     sourceReg1?: Register;
     sourceReg2?: Register;
@@ -29,7 +29,6 @@ export interface Instruction {
 export interface PipelineMetrics {
     totalCycles: number;
     completedInstructions: number;
-    stallCycles: number;
     bubbleCycles: number;
     resourceUtilization: {
         IF: number;

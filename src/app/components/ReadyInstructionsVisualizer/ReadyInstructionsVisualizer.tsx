@@ -1,47 +1,31 @@
 "use client";
-import { useState } from "react";
 import { usePipelineContext } from "@/contexts/PipelineContext";
-import { Button } from "@/components/ui/button";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 
 export const ReadyInstructionsVisualizer = () => {
-    const { readyQueue, addInstruction } = usePipelineContext();
-    const [newInstruction, setNewInstruction] = useState({
-        value: '',
-        resourceUnit: 'ALU1' as 'ALU1' | 'ALU2' | 'MUL' | 'LSU',
-        sourceReg1: { number: 0, value: 0 },
-        sourceReg2: { number: 0, value: 0 },
-        destReg: { number: 0, value: 0 }
-    });
+    const { readyQueue } = usePipelineContext();
 
-    const instructionTypes = ['ADD', 'SUB', 'MUL', 'DIV', 'LW', 'SW', 'BEQ'];
-    const resourceUnits = ['ALU1', 'ALU2', 'MUL', 'LSU'];
-    const registers = Array.from({ length: 32 }, (_, i) => i); // R0 to R31
+    // const instructionTypes = ['ADD', 'SUB', 'MUL', 'DIV', 'LW', 'SW', 'BEQ'];
+    // const resourceUnits = ['ALU1', 'ALU2', 'MUL', 'LSU'];
+    // const registers = Array.from({ length: 32 }, (_, i) => i); // R0 to R31
 
-    const handleAdd = () => {
-        const instruction = {
-            ...newInstruction,
-            color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
-            type: 'RR',
-            stage: 'IF' as const,
-            latency: 1,
-            remainingLatency: 1,
-            dependencies: []
-        };
-        addInstruction(instruction);
-    };
+    // const handleAdd = () => {
+    //     const instruction = {
+    //         ...newInstruction,
+    //         color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
+    //         type: 'RR',
+    //         stage: 'IF' as const,
+    //         latency: 1,
+    //         remainingLatency: 1,
+    //         dependencies: []
+    //     };
+    //     addInstruction(instruction);
+    // };
 
     return (
-        <div className="mt-5">
-            <h3 className="text-lg font-semibold mb-2">Ready Instructions Queue</h3>
+        <div className="text-center mt-5">
+            <h3 className="text-2xl font-semibold mb-4">Ready Instructions Queue</h3>
             
-            <div className="mb-4 p-4 border rounded">
+            {/* <div className="mb-4 p-4 border rounded">
                 <h4 className="text-md font-medium mb-2">Add New Instruction</h4>
                 <div className="flex w-full gap-4">
                     <Select onValueChange={(value) => setNewInstruction({...newInstruction, value})}>
@@ -80,7 +64,7 @@ export const ReadyInstructionsVisualizer = () => {
                         </SelectTrigger>
                         <SelectContent>
                             {registers.map(reg => (
-                                <SelectItem key={`src1_${reg}`} value={reg.toString()}>R{reg}</SelectItem>
+                                <SelectItem key={`src1_${reg}`} value={reg.toString()}>{reg > 15 ? "" : "R"}{reg}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
@@ -121,26 +105,25 @@ export const ReadyInstructionsVisualizer = () => {
                         Add Instruction
                     </Button>
                 </div>
-            </div>
+            </div> */}
 
             <div className="grid grid-cols-5 gap-2">
                 {readyQueue.map((instruction, index) => (
                     <div 
                         key={index}
-                        className="p-2 rounded border"
+                        className="w-32 h-36 text-xl p-2 rounded border"
                         style={{ backgroundColor: instruction.color }}
                     >
-                        <div className="font-medium">{instruction.value}</div>
-                        <div className="text-sm">
-                            {instruction.resourceUnit && `Unit: ${instruction.resourceUnit}`}
+                        <div className="font-bold">
+                            {instruction.value}
                         </div>
-                        <div className="text-sm">
-                            {instruction.sourceReg1 && `Src1: R${instruction.sourceReg1.number}`}
+                        <div>
+                            {instruction.sourceReg1 && `Src1: ${instruction.sourceReg1.number > 15 ? "" : "R"}${instruction.sourceReg1.number}`}
                         </div>
-                        <div className="text-sm">
+                        <div>
                             {instruction.sourceReg2 && `Src2: R${instruction.sourceReg2.number}`}
                         </div>
-                        <div className="text-sm">
+                        <div>
                             {instruction.destReg && `Dest: R${instruction.destReg.number}`}
                         </div>
                     </div>
