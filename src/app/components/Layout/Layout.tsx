@@ -233,7 +233,7 @@ const Layout = () => {
   }
 
   const handleSuperscalarTest = () => {
-    const instructions = [
+    const instructions = selectedMultithreading === "none" ? [
       {
         value: "ADD",
         type: "RR",
@@ -325,7 +325,191 @@ const Layout = () => {
         destReg: { number: 11, value: 0 },
         remainingLatency: 1
       }
-    ];
+    ] : ["IMT", "BMT"].includes(selectedMultithreading) ? [
+      {
+        value: "ADD",
+        type: "RR",
+        color: "#880d0d",
+        cycle: 0,
+        resourceUnit: "ALU1" as const,
+        latency: 1,
+        stage: "EXE" as const,
+        sourceReg1: { number: 2, value: 0 },
+        sourceReg2: { number: 3, value: 0 },
+        destReg: { number: 1, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "LW",
+        type: "RM",
+        color: "#11114e",
+        cycle: 0,
+        resourceUnit: "LSU" as const,
+        latency: 1,
+        stage: "EXE" as const,
+        sourceReg1: { number: 20, value: 0 },
+        sourceReg2: { number: 5, value: 0 },
+        destReg: { number: 10, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "ADD",
+        type: "RR",
+        color: "#880d0d",
+        cycle: 0,
+        resourceUnit: "ALU1" as const,
+        latency: 1,
+        stage: "EXE" as const,
+        sourceReg1: { number: 1, value: 0 },
+        sourceReg2: { number: 6, value: 0 },
+        destReg: { number: 5, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "MUL",
+        type: "RI",
+        color: "#11114e",
+        cycle: 0,
+        resourceUnit: "MUL" as const,
+        latency: 1,
+        stage: "EXE" as const,
+        sourceReg1: { number: 4, value: 0 },
+        sourceReg2: { number: 8, value: 0 },
+        destReg: { number: 7, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "ADD",
+        type: "RR",
+        color: "#880d0d",
+        cycle: 0,
+        resourceUnit: "ALU2" as const,
+        latency: 1,
+        stage: "EXE" as const,
+        sourceReg1: { number: 7, value: 0 },
+        sourceReg2: { number: 3, value: 0 },
+        destReg: { number: 2, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "ADD",
+        type: "RR",
+        color: "#11114e",
+        cycle: 0,
+        resourceUnit: "ALU1" as const,
+        latency: 1,
+        stage: "EXE" as const,
+        sourceReg1: { number: 4, value: 0 },
+        sourceReg2: { number: 10, value: 0 },
+        destReg: { number: 9, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "ADD",
+        type: "RR",
+        color: "#880d0d",
+        cycle: 0,
+        resourceUnit: "ALU2" as const,
+        latency: 1,
+        stage: "EXE" as const,
+        sourceReg1: { number: 4, value: 0 },
+        sourceReg2: { number: 6, value: 0 },
+        destReg: { number: 11, value: 0 },
+        remainingLatency: 1
+      }
+    ] : [
+      {
+        value: "ADD",
+        type: "RR",
+        color: "#880d0d",
+        cycle: 0,
+        resourceUnit: "ALU1" as const,
+        latency: 1,
+        stage: "EXE" as const,
+        sourceReg1: { number: 2, value: 0 },
+        sourceReg2: { number: 3, value: 0 },
+        destReg: { number: 1, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "LW",
+        type: "RM",
+        color: "#11114e",
+        cycle: 0,
+        resourceUnit: "LSU" as const,
+        latency: 1,
+        stage: "EXE" as const,
+        sourceReg1: { number: 20, value: 0 },
+        sourceReg2: { number: 5, value: 0 },
+        destReg: { number: 10, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "ADD",
+        type: "RR",
+        color: "#425a23",
+        cycle: 0,
+        resourceUnit: "ALU1" as const,
+        latency: 1,
+        stage: "EXE" as const,
+        sourceReg1: { number: 1, value: 0 },
+        sourceReg2: { number: 6, value: 0 },
+        destReg: { number: 5, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "MUL",
+        type: "RI",
+        color: "#11114e",
+        cycle: 0,
+        resourceUnit: "MUL" as const,
+        latency: 1,
+        stage: "EXE" as const,
+        sourceReg1: { number: 4, value: 0 },
+        sourceReg2: { number: 8, value: 0 },
+        destReg: { number: 7, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "ADD",
+        type: "RR",
+        color: "#a14695",
+        cycle: 0,
+        resourceUnit: "ALU2" as const,
+        latency: 1,
+        stage: "EXE" as const,
+        sourceReg1: { number: 7, value: 0 },
+        sourceReg2: { number: 3, value: 0 },
+        destReg: { number: 2, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "ADD",
+        type: "RR",
+        color: "#a14695",
+        cycle: 0,
+        resourceUnit: "ALU1" as const,
+        latency: 1,
+        stage: "EXE" as const,
+        sourceReg1: { number: 4, value: 0 },
+        sourceReg2: { number: 10, value: 0 },
+        destReg: { number: 9, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "ADD",
+        type: "RR",
+        color: "#880d0d",
+        cycle: 0,
+        resourceUnit: "ALU2" as const,
+        latency: 1,
+        stage: "EXE" as const,
+        sourceReg1: { number: 4, value: 0 },
+        sourceReg2: { number: 6, value: 0 },
+        destReg: { number: 11, value: 0 },
+        remainingLatency: 1
+      }
+    ]
 
     instructions.map(i => addInstruction(i));
   }
