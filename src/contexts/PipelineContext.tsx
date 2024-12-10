@@ -528,6 +528,19 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                  remainingLatency: 1
              },
              {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "ALU2" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
+            {
                  value: "MUL",
                  type: "RI",
                  color: "#286aa8",
@@ -539,8 +552,8 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                  sourceReg2: { number: 8, value: 0 },
                  destReg: { number: 7, value: 0 },
                  remainingLatency: 1
-             },
-             {
+            },
+            {
                  value: "LW",
                  type: "RM",
                  color: "#44536e",
@@ -552,7 +565,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                  sourceReg2: { number: 5, value: 0 },
                  destReg: { number: 10, value: 0 },
                  remainingLatency: 1
-             }
+            }
          ];
 
          const instructionsCycle3 = [
@@ -594,7 +607,33 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                  sourceReg2: { number: 3, value: 0 },
                  destReg: { number: 2, value: 0 },
                  remainingLatency: 1
-             }
+             },
+             {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "MUL" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "LSU" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            }
          ];
 
          // Seleciona as instruções com base no ciclo atual
@@ -615,15 +654,20 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                  return;
          }
 
-         setSuperscalarReadyQueue(
-             superscalarReadyQueue.filter(
-                 inst => !currentInstructions.some(curr => curr.value === inst.value)
-             )
-         );
-         // Atualiza o estado das instruções no contexto
-         setSuperscalarInstructions(currentInstructions);
+         setSuperscalarInstructions(prev => {
+            // Adiciona as instruções do ciclo atual ao pipeline
+            return [...prev, ...currentInstructions];
+        });
 
-         setTotalInstructions(7);
+        // Obter os valores das instruções que estão atualmente no pipeline
+        const instructionsInPipeline = currentInstructions.map(inst => inst.value);
+
+        // Remover as instruções que estão no pipeline da fila de pronto
+        setSuperscalarReadyQueue(prevQueue => 
+            prevQueue.filter(inst => !instructionsInPipeline.includes(inst.value))
+        );
+
+        setTotalInstructions(7);
 
          // Atualiza as métricas
          if (cycleCount.current !== 4) {
@@ -686,7 +730,33 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 sourceReg2: { number: 6, value: 0 },
                 destReg: { number: 11, value: 0 },
                 remainingLatency: 1
-            }
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "MUL" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "LSU" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
         ];
 
         const instructionsCycle2 = [
@@ -701,6 +771,32 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 sourceReg1: { number: 0, value: 0 },
                 sourceReg2: { number: 0, value: 0 },
                 destReg: { number: 0, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "ALU1" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "ALU2" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
                 remainingLatency: 1
             },
             {
@@ -757,7 +853,46 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 sourceReg2: { number: 6, value: 0 },
                 destReg: { number: 5, value: 0 },
                 remainingLatency: 1
-            }
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "ALU2" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "MUL" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "LSU" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
         ];
 
         const instructionsCycle4 = [
@@ -772,6 +907,32 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 sourceReg1: { number: 0, value: 0 },
                 sourceReg2: { number: 0, value: 0 },
                 destReg: { number: 0, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "ALU1" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "ALU2" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
                 remainingLatency: 1
             },
             {
@@ -817,6 +978,19 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 remainingLatency: 1
             },
             {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "ALU1" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
+            {
                 value: "ADD",
                 type: "RR",
                 color: "#880d0d",
@@ -828,7 +1002,33 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 sourceReg2: { number: 3, value: 0 },
                 destReg: { number: 2, value: 0 },
                 remainingLatency: 1
-            }
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "MUL" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "LSU" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
         ];
 
         const instructionsCycle6 = [
@@ -857,7 +1057,46 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 sourceReg2: { number: 10, value: 0 },
                 destReg: { number: 9, value: 0 },
                 remainingLatency: 1
-            }
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "ALU2" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "MUL" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "LSU" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
         ]
 
         // Seleciona as instruções com base no ciclo atual
@@ -886,13 +1125,18 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 return;
         }
 
-        setSuperscalarReadyQueue(
-            superscalarReadyQueue.filter(
-                inst => !currentInstructions.some(curr => curr.value === inst.value)
-            )
+        setSuperscalarInstructions(prev => {
+            // Adiciona as instruções do ciclo atual ao pipeline
+            return [...prev, ...currentInstructions];
+        });
+
+        // Obter os valores das instruções que estão atualmente no pipeline
+        const instructionsInPipeline = currentInstructions.map(inst => inst.value);
+
+        // Remover as instruções que estão no pipeline da fila de pronto
+        setSuperscalarReadyQueue(prevQueue => 
+            prevQueue.filter(inst => !instructionsInPipeline.includes(inst.value))
         );
-        // Atualiza o estado das instruções no contexto
-        setSuperscalarInstructions(currentInstructions);
 
         setTotalInstructions(7);
 
@@ -957,6 +1201,32 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 sourceReg2: { number: 6, value: 0 },
                 destReg: { number: 11, value: 0 },
                 remainingLatency: 1
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "MUL" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "LSU" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
             }
         ];
 
@@ -972,6 +1242,32 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 sourceReg1: { number: 0, value: 0 },
                 sourceReg2: { number: 0, value: 0 },
                 destReg: { number: 0, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "ALU1" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "ALU2" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
                 remainingLatency: 1
             },
             {
@@ -1014,6 +1310,32 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 sourceReg1: { number: 0, value: 0 },
                 sourceReg2: { number: 0, value: 0 },
                 destReg: { number: 0, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "ALU1" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "ALU2" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
                 remainingLatency: 1
             },
             {
@@ -1083,7 +1405,33 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 sourceReg2: { number: 3, value: 0 },
                 destReg: { number: 2, value: 0 },
                 remainingLatency: 1
-            }
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "MUL" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "LSU" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
         ];
 
         const instructionsCycle5 = [
@@ -1112,7 +1460,46 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 sourceReg2: { number: 10, value: 0 },
                 destReg: { number: 9, value: 0 },
                 remainingLatency: 1
-            }
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "ALU2" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "MUL" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "LSU" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
         ];
 
 
@@ -1139,13 +1526,18 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 return;
         }
 
-        setSuperscalarReadyQueue(
-            superscalarReadyQueue.filter(
-                inst => !currentInstructions.some(curr => curr.value === inst.value)
-            )
+        setSuperscalarInstructions(prev => {
+            // Adiciona as instruções do ciclo atual ao pipeline
+            return [...prev, ...currentInstructions];
+        });
+
+        // Obter os valores das instruções que estão atualmente no pipeline
+        const instructionsInPipeline = currentInstructions.map(inst => inst.value);
+
+        // Remover as instruções que estão no pipeline da fila de pronto
+        setSuperscalarReadyQueue(prevQueue => 
+            prevQueue.filter(inst => !instructionsInPipeline.includes(inst.value))
         );
-        // Atualiza o estado das instruções no contexto
-        setSuperscalarInstructions(currentInstructions);
 
         setTotalInstructions(7);
 
@@ -1267,6 +1659,19 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 remainingLatency: 1
             },
             {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "ALU2" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
+            {
                 value: "LW",
                 type: "RM",
                 color: "#11114e",
@@ -1333,6 +1738,32 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 sourceReg2: { number: 3, value: 0 },
                 destReg: { number: 2, value: 0 },
                 remainingLatency: 1
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "MUL" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
+            },
+            {
+                value: "",
+                type: "RR",
+                color: "#444444",
+                cycle: 0,
+                resourceUnit: "LSU" as const,
+                latency: 1,
+                stage: "EXE" as const,
+                sourceReg1: { number: 24, value: 0 },
+                sourceReg2: { number: 25, value: 0 },
+                destReg: { number: 26, value: 0 },
+                remainingLatency: 1
             }
         ];
 
@@ -1353,13 +1784,19 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 return;
         }
 
-        setSuperscalarReadyQueue(
-            superscalarReadyQueue.filter(
-                inst => !currentInstructions.some(curr => curr.value === inst.value)
-            )
-        );
         // Atualiza o estado das instruções no contexto
-        setSuperscalarInstructions(currentInstructions);
+        setSuperscalarInstructions(prev => {
+            // Adiciona as instruções do ciclo atual ao pipeline
+            return [...prev, ...currentInstructions];
+        });
+
+        // Obter os valores das instruções que estão atualmente no pipeline
+        const instructionsInPipeline = currentInstructions.map(inst => inst.value);
+
+        // Remover as instruções que estão no pipeline da fila de pronto
+        setSuperscalarReadyQueue(prevQueue => 
+            prevQueue.filter(inst => !instructionsInPipeline.includes(inst.value))
+        );
 
         setTotalInstructions(7);
 
