@@ -562,7 +562,7 @@ const Layout = () => {
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="superescalar" id="r-superescalar" />
-                  <Label htmlFor="r-superescalar">Superescalar {selectedMultithreading}</Label>
+                  <Label htmlFor="r-superescalar">Superescalar</Label>
                 </div>
               </RadioGroup>
             </div>
