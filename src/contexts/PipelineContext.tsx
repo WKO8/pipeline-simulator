@@ -89,13 +89,80 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
         }
     }
 
+    const intercalateThreadsIMT = (queue: Instruction[]) => {
+        const result = [];
+        let i = 0;
+    
+        // Intercala blocos de instruções das threads
+        while (i < queue.length) {
+            // Adiciona blocos de Thread 1 e define a cor como "red"
+            const instruction1 = { ...queue[i++], color: '#a3091c' };
+            result.push(instruction1);
+
+            if (i < queue.length){
+                // Adiciona blocos de Thread 2 e define a cor como "green"
+                const instruction2 = { ...queue[i++], color: '#295e1e' };
+                result.push(instruction2);
+            }
+        }
+    
+        return result;
+    };
+
+    const intercalateThreadsBMT = (queue1: Instruction[], queue2: Instruction[], blockSize: number) => {
+        const result = [];
+        let i = 0, j = 0;
+
+        // Intercala blocos de instruções das threads
+        while (i < queue1.length || j < queue2.length) {
+            // Adiciona blocos de Thread 1 e define a cor como "red"
+            for (let k = 0; k < blockSize && i < queue1.length; k++) {
+                const instruction = { ...queue1[i++], color: '#a3091c' };
+                result.push(instruction);
+            }
+            // Adiciona blocos de Thread 2 e define a cor como "green"
+            for (let k = 0; k < blockSize && j < queue2.length; k++) {
+                const instruction = { ...queue2[j++], color: '#295e1e' };
+                result.push(instruction);
+            }
+        }
+        return result;
+    };
+
     const addInstruction = (newInstruction: Instruction) => {
+        // Verifica se o multithreading é IMT, BMT ou SMT e desativa o forwarding
+        if (multiThreadingType === 'IMT' || multiThreadingType === 'BMT' || multiThreadingType === 'SMT') {
+            setForwardingEnabled(false);
+        }
+    
         if (pipelineType === 'escalar') {
             const instWithResource = assignResourceUnit(newInstruction);
-            setScalarReadyQueue(prev => [...prev, instWithResource]);
+            
+            // Adiciona a nova instrução com o recurso atribuído
+            setScalarReadyQueue(prev => {
+                const updatedQueue = [...prev, instWithResource];
+                
+                // Se for IMT, intercala as instruções da fila única
+                if (multiThreadingType === 'IMT') {
+                    return intercalateThreadsIMT(updatedQueue); // Retorna a fila intercalada com cores ajustadas
+                }
+
+                // Se for BMT, divide as instruções por thread e intercala
+                if (multiThreadingType === 'BMT') {
+                    const thread1 = updatedQueue.filter(inst => inst.threadId === 1);
+                    const thread2 = updatedQueue.filter(inst => inst.threadId === 2);
+                    
+                    const intercalatedQueue = intercalateThreadsBMT(thread1, thread2, 2); // O tamanho do bloco é 2
+                    return intercalatedQueue; // Retorna a fila intercalada
+                }
+                
+                return updatedQueue; // Caso não seja IMT ou BMT, retorna a fila com a nova instrução
+            });
         } else {
             setSuperscalarReadyQueue(prev => [...prev, newInstruction]);
         }
+    
+        // Atualiza o contador de instruções
         setTotalInstructions(prev => prev + 1);
     };
 
@@ -330,7 +397,6 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                     const instWithResource = assignResourceUnit(nextInst);
                     const newInst: Instruction = {
                         ...instWithResource,
-                        color: multiThreadingType === "IMT" ? scalarReadyQueue.length % 2 === 0 ? '#000000' : '#ffffff' : instWithResource.color,
                         stage: 'IF'
                     };
                     setScalarReadyQueue(remainingQueue);

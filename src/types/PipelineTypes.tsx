@@ -12,6 +12,7 @@ export interface ForwardingPath {
 }
 
 export interface Instruction {
+    threadId: number,
     value: string;
     color: string;
     type: string;

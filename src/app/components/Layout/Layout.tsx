@@ -76,6 +76,7 @@ const Layout = () => {
   const handleScalarTest1 = () => {
     const instructions = [
       {
+        threadId: 1,
         value: "ADD",
         type: "RR",
         color: "#a3091c",
@@ -88,6 +89,7 @@ const Layout = () => {
         remainingLatency: 1
       },
       {
+        threadId: 2,
         value: "ADD",
         type: "RR",
         color: "#0f1734",
@@ -100,6 +102,7 @@ const Layout = () => {
         remainingLatency: 1
       },
       {
+        threadId: 1,
         value: "SUB",
         type: "RR",
         color: "#197e8e",
@@ -112,6 +115,7 @@ const Layout = () => {
         remainingLatency: 1
       },
       {
+        threadId: 1,
         value: "MUL",
         type: "RI",
         color: "#295e1e",
@@ -124,6 +128,7 @@ const Layout = () => {
         remainingLatency: 1
       },
       {
+        threadId: 2,
         value: "SW",
         type: "RM",
         color: "#244853",
@@ -136,6 +141,7 @@ const Layout = () => {
         remainingLatency: 1
       },
       {
+        threadId: 2,
         value: "ADD",
         type: "RR",
         color: "#a54b9e",
@@ -148,6 +154,7 @@ const Layout = () => {
         remainingLatency: 1
       },
       {
+        threadId: 1,
         value: "LW",
         type: "RR",
         color: "#d88037",
