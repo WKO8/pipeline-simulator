@@ -43,10 +43,11 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
     const { forwardingEnabled, setForwardingEnabled } = useForwarding();
     const [totalInstructions, setTotalInstructions] = useState(0);
     const [threads, setThreads] = useState<ThreadContext[]>([]);
-    const [totalBubbleCycles, setTotalBubbleCycles] = useState(0);
 
 
     const cycleCount = useRef(0);
+    const quantityCompletedInstructions = useRef(0);
+    const hasCompletedFirstInstruction = useRef(false);
 
     const [metrics, setMetrics] = useState<PipelineMetrics>({
         totalCycles: 0,
@@ -74,9 +75,19 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 WB: 0
             }
         });
-        setTotalBubbleCycles(0);
         cycleCount.current = 0;
+        hasCompletedFirstInstruction.current = false;
     };
+
+    const clearInstructions = () => {
+        if (pipelineType === 'escalar') {
+            setScalarInstructions([]);
+            setScalarReadyQueue([]);
+        } else {
+            setSuperscalarInstructions([]);
+            setSuperscalarReadyQueue([]);
+        }
+    }
 
     const addInstruction = (newInstruction: Instruction) => {
         if (pipelineType === 'escalar') {
@@ -106,6 +117,22 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
         setThreads(prev => [...prev, newThread]);
     };
 
+    const countBubbleCycle = (instructions: Instruction[], stageOccupancy: { [key: string]: number }): number => {
+        // Only count bubbles after first instruction completes
+        if (!hasCompletedFirstInstruction.current) {
+            return 0;
+        }
+
+        console.log('WB occupancy:', stageOccupancy.WB);
+        const bubbleCount = stageOccupancy.WB === 0 ? 1 : 0;
+        console.log('Bubble count:', bubbleCount);
+
+        
+    
+        return bubbleCount;
+    };
+
+
     const clockCycle = () => {
         const isPipelineComplete = () => {
             const hasActiveInstructions = pipelineType === 'escalar' ? 
@@ -123,16 +150,19 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
         if (pipelineType === 'escalar') {
             setScalarInstructions(prev => {
                 const completedInstructions = prev.filter(inst => inst.stage === 'WB');
-                const withoutCompletedInstructions = prev.filter(inst => inst.stage !== 'WB');
-
+                
                 // Track stage occupancy
                 const stageOccupancy = {
-                    IF: withoutCompletedInstructions.filter(i => i.stage === 'IF').length,
-                    DE: withoutCompletedInstructions.filter(i => i.stage === 'DE').length,
-                    EXE: withoutCompletedInstructions.filter(i => i.stage === 'EXE').length,
-                    MEM: withoutCompletedInstructions.filter(i => i.stage === 'MEM').length,
-                    WB: withoutCompletedInstructions.filter(i => i.stage === 'WB').length
+                    IF: prev.filter(i => i.stage === 'IF').length,
+                    DE: prev.filter(i => i.stage === 'DE').length,
+                    EXE: prev.filter(i => i.stage === 'EXE').length,
+                    MEM: prev.filter(i => i.stage === 'MEM').length,
+                    WB: prev.filter(i => i.stage === 'WB').length
                 };
+                
+                const withoutCompletedInstructions = prev.filter(inst => inst.stage !== 'WB');
+                console.log('All instructions:', withoutCompletedInstructions);
+
 
                 const stagePriority: { [key in Instruction['stage']]: number } = { 'WB': 0, 'MEM': 1, 'EXE': 2, 'DE': 3, 'IF': 4 };
                 const processedInstructions: Instruction[] = [];
@@ -157,20 +187,11 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
 
                     // Handle EXE stage
                     if (inst.stage === 'EXE') {
-                        const memInst = withoutCompletedInstructions.find(i => i.stage === 'MEM');
-                        const wbInst = withoutCompletedInstructions.filter(i => i.stage === 'WB');
-                        const nextStage = ['LW', 'SW', 'DIV', 'MUL'].includes(inst.value) ? 'MEM' : 'WB';
-                        const canAdvance = nextStage === 'MEM' 
-                            ? true 
-                            : !wbInst.length && !memInst;
-
-                        if (!currentStages.includes(nextStage) && canAdvance) {
-                            return {
-                                ...inst,
-                                stage: nextStage as Instruction['stage'],
-                                remainingLatency: 0
-                            };
-                        }
+                        return {
+                            ...inst,
+                            stage: 'MEM' as Instruction['stage'],
+                            remainingLatency: 0
+                        };
                     }
 
                     // Handle DE stage
@@ -275,11 +296,21 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                     return inst;
                 });
 
+                console.log("COMP INSTRU: " + completedInstructions.length)
+
+                // Update first instruction completion status
+                if (completedInstructions.length > 0) {
+                    hasCompletedFirstInstruction.current = true;
+                }
+
+                let bubbles = countBubbleCycle(withoutCompletedInstructions, stageOccupancy);
+                quantityCompletedInstructions.current += stageOccupancy.WB > 0 ? 1 : 0;
+
                 // Update metrics
                 setMetrics(prev => ({
                     totalCycles: cycleCount.current,
-                    completedInstructions: prev.completedInstructions + completedInstructions.length,
-                    bubbleCycles: totalBubbleCycles,
+                    completedInstructions: prev.completedInstructions + quantityCompletedInstructions.current,
+                    bubbleCycles: prev.bubbleCycles + bubbles,
                     resourceUtilization: {
                         IF: prev.resourceUtilization.IF + (stageOccupancy.IF > 0 ? 1 : 0),
                         DE: prev.resourceUtilization.DE + (stageOccupancy.DE > 0 ? 1 : 0),
@@ -288,6 +319,9 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                         WB: prev.resourceUtilization.WB + (completedInstructions.length > 0 ? 1 : 0)
                     }
                 }));
+
+                bubbles = 0;
+                quantityCompletedInstructions.current = 0;
 
                 // Fetch new instruction if possible
                 const hasInstructionInIF = updatedInstructions.some(inst => inst.stage === 'IF');
@@ -1277,16 +1311,6 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
             clearInstructions(); // Limpa as instruções do layout
             cycleCount.current = 0; // Reseta o contador de ciclos
             return; // Para a contagem de ciclos
-        }
-    }
-
-    const clearInstructions = () => {
-        if (pipelineType === 'escalar') {
-            setScalarInstructions([]);
-            setScalarReadyQueue([]);
-        } else {
-            setSuperscalarInstructions([]);
-            setSuperscalarReadyQueue([]);
         }
     }
 

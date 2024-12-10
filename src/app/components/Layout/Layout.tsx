@@ -112,18 +112,6 @@ const Layout = () => {
         remainingLatency: 1
       },
       {
-        value: "SW",
-        type: "RM",
-        color: "#244853",
-        resourceUnit: "LSU" as const,
-        latency: 1,
-        stage: "IF" as const,
-        sourceReg1: { number: 18, value: 0 },
-        sourceReg2: { number: 3, value: 0 },
-        destReg: { number: 9, value: 0 },
-        remainingLatency: 1
-      },
-      {
         value: "MUL",
         type: "RI",
         color: "#295e1e",
@@ -133,6 +121,18 @@ const Layout = () => {
         sourceReg1: { number: 1, value: 0 },
         sourceReg2: { number: 5, value: 0 },
         destReg: { number: 0, value: 0 },
+        remainingLatency: 1
+      },
+      {
+        value: "SW",
+        type: "RM",
+        color: "#244853",
+        resourceUnit: "LSU" as const,
+        latency: 1,
+        stage: "IF" as const,
+        sourceReg1: { number: 18, value: 0 },
+        sourceReg2: { number: 3, value: 0 },
+        destReg: { number: 9, value: 0 },
         remainingLatency: 1
       },
       {
