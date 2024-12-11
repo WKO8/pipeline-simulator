@@ -7,8 +7,8 @@ const PerformanceLog = () => {
     const { pipelineType } = usePipelineContext();
     const ipc = metrics.completedInstructions / metrics.totalCycles;
     
-    console.log("Completed instructions: " + metrics.completedInstructions)
-    console.log("Total Cycles: " + metrics.totalCycles)
+    //console.log("Completed instructions: " + metrics.completedInstructions)
+    //console.log("Total Cycles: " + metrics.totalCycles)
 
     const cpi = metrics.totalCycles / metrics.completedInstructions
 

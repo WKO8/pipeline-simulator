@@ -17,7 +17,8 @@ export interface Instruction {
     color: string;
     type: string;
     stage: 'IF' | 'DE' | 'EXE' | 'MEM' | 'WB';
-    resourceUnit?: 'Ciclo' | 'ALU1' | 'ALU2' | 'MUL' | 'LSU';
+    stageSuperescalar: 'IF' | 'DE1' | 'DE2' | 'EXE' | 'WB';
+    resourceUnit: 'Ciclo'| 'ALU1' | 'ALU2' | 'ALU' | 'MUL' | 'LSU';
     cycle?: number;
     sourceReg1?: Register;
     sourceReg2?: Register;

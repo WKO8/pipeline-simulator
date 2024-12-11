@@ -38,6 +38,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
     const [superscalarInstructions, setSuperscalarInstructions] = useState<Instruction[]>([]);
     const [scalarReadyQueue, setScalarReadyQueue] = useState<Instruction[]>([]);
     const [superscalarReadyQueue, setSuperscalarReadyQueue] = useState<Instruction[]>([]);
+    const [superscalarOrderQueue, setSuperscalarOrderQueue] = useState<Instruction[]>([]);
     const [pipelineType, setPipelineType] = useState<'escalar' | 'superescalar'>('escalar');
     const [multiThreadingType, setMultiThreadingType] = useState<'none' | 'IMT' | 'BMT' | 'SMT'>('none');
     const { forwardingEnabled, setForwardingEnabled } = useForwarding();
@@ -131,7 +132,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
 
     const addInstruction = (newInstruction: Instruction) => {
         // Verifica se o multithreading é IMT, BMT ou SMT e desativa o forwarding
-        if (multiThreadingType === 'IMT' || multiThreadingType === 'BMT' || multiThreadingType === 'SMT') {
+        if (pipelineType == 'superescalar' || multiThreadingType === 'IMT' || multiThreadingType === 'BMT' || multiThreadingType === 'SMT') {
             setForwardingEnabled(false);
         }
     
@@ -158,8 +159,20 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 
                 return updatedQueue; // Caso não seja IMT ou BMT, retorna a fila com a nova instrução
             });
-        } else {
-            setSuperscalarReadyQueue(prev => [...prev, newInstruction]);
+        } else if (pipelineType === 'superescalar') {
+            // Adiciona a nova instrução com o recurso atribuído
+            setSuperscalarReadyQueue(prev => {
+                const updatedQueue = [...prev, newInstruction];
+                
+                // Se for IMT, intercala as instruções da fila única
+                if (multiThreadingType === 'IMT') {
+                    return intercalateThreadsIMT(updatedQueue); // Retorna a fila intercalada com cores ajustadas
+                }
+                
+                return updatedQueue; // Caso não seja IMT, retorna a fila com a nova instrução
+            });
+
+            setSuperscalarOrderQueue(prev => [...prev, newInstruction]);
         }
     
         // Atualiza o contador de instruções
@@ -190,9 +203,9 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
             return 0;
         }
 
-        console.log('WB occupancy:', stageOccupancy.WB);
+        //console.log('WB occupancy:', stageOccupancy.WB);
         const bubbleCount = stageOccupancy.WB === 0 ? 1 : 0;
-        console.log('Bubble count:', bubbleCount);
+        //console.log('Bubble count:', bubbleCount);
 
         
     
@@ -405,758 +418,253 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
 
                 return updatedInstructions;
             });
-        } else {
-            console.log(multiThreadingType);
-            switch (multiThreadingType) {
-                case "none":
-                    superScalarWithoutMultithreading();
-                    break;
-                case "IMT":
-                    superScalarWithIMT();
-                    break;
-                case "SMT":
-                    superScalarWithSMT();
-                    break;
-                case "BMT":
-                    superScalarWithBMT();
-                    break;
-                default:
-                    break;
-            }
-           
+        } else if (multiThreadingType === 'none' || multiThreadingType === 'IMT') {
+            setSuperscalarInstructions(prev => {
+                const completedInstructions = prev.filter(inst => inst.stageSuperescalar === 'WB');
+                
+                // Track stage occupancy
+                const stageOccupancy = {
+                    IF: prev.filter(i => i.stageSuperescalar === 'IF').length,
+                    DE1: prev.filter(i => i.stageSuperescalar === 'DE1').length,
+                    DE2: prev.filter(i => i.stageSuperescalar === 'DE2').length,
+                    EXE: prev.filter(i => i.stageSuperescalar === 'EXE').length,
+                    WB: prev.filter(i => i.stageSuperescalar === 'WB').length
+                };
+                
+                const withoutCompletedInstructions = prev.filter(inst => inst.stageSuperescalar !== 'WB');
+                //console.log('All instructions:', withoutCompletedInstructions);
+
+
+                const stagePriority: { [key in Instruction['stageSuperescalar']]: number } = { 'WB': 0, 'EXE': 1, 'DE2': 2,'DE1': 3, 'IF': 4 };
+                const processedInstructions: Instruction[] = [];
+
+                const updatedInstructions = [...withoutCompletedInstructions]
+                .sort((a, b) => stagePriority[a.stageSuperescalar] - stagePriority[b.stageSuperescalar])
+                .map(inst => {
+                    const currentStages = processedInstructions.map(i => i.stageSuperescalar);
+
+                    // Handle WB stage
+                    if (inst.stageSuperescalar === 'WB') {
+                        return inst;
+                    }
+
+                    // Handle EXE stage
+                    if (inst.stageSuperescalar === 'EXE') {
+                        return {
+                            ...inst,
+                            stageSuperescalar: inst.remainingLatency === 0 ? 'WB' as const : 'EXE' as const,
+                            remainingLatency:0
+                        };
+                    }
+
+                    // Handle DE1 stage
+                    if (inst.stageSuperescalar === 'DE1') {
+                        const de2Inst = withoutCompletedInstructions.find(i => i.stageSuperescalar === 'DE2');
+                        const deps = detectSuperescalarDependencies(inst, withoutCompletedInstructions.filter(i => i.stageSuperescalar === 'EXE'));
+                        const exInst = withoutCompletedInstructions.find(i => i.stageSuperescalar === 'EXE');
+
+                        const indexDe1Inst = superscalarOrderQueue.findIndex(i => i.destReg === inst.destReg && i.value === inst.value);
+                        const indexDe2Inst = superscalarOrderQueue.findIndex(i => i.destReg === de2Inst?.destReg && i.value === de2Inst?.value);
+
+                        const dependenciesResolved = deps.every(dep => {
+                            const depInst = withoutCompletedInstructions.find(i => i.value === dep);
+                            return depInst && depInst.remainingLatency === 0;
+                        });
+
+                        console.log("DE1");
+                        console.log(superscalarOrderQueue);
+                        console.log(indexDe1Inst);
+                        console.log(indexDe2Inst);
+
+                        const canMove = dependenciesResolved &&
+                            !currentStages.includes('EXE') &&
+                            (!exInst || exInst?.remainingLatency === 0) &&
+                            (de2Inst?.resourceUnit !== inst.resourceUnit || indexDe1Inst < indexDe2Inst);
+
+                        if (canMove) {
+                            return {
+                                ...inst,
+                                stageSuperescalar: 'EXE' as const,
+                                remainingLatency: inst.remainingLatency - 1,
+                                dependencies: []
+                            };
+                        } 
+                        
+                        return { ...inst, dependencies: deps };
+                    }
+
+                    // Handle DE2 stage
+                    if (inst.stageSuperescalar === 'DE2') {
+                        const de1Inst = withoutCompletedInstructions.find(i => i.stageSuperescalar === 'DE1');
+                        const deps = detectSuperescalarDependencies(inst, withoutCompletedInstructions.filter(i => i.stageSuperescalar === 'EXE'));
+                        const exInst = withoutCompletedInstructions.find(i => i.stageSuperescalar === 'EXE');
+                        
+                        const indexDe1Inst = superscalarOrderQueue.findIndex(i => i.destReg === de1Inst?.destReg && i.value === de1Inst?.value);
+                        const indexDe2Inst = superscalarOrderQueue.findIndex(i => i.destReg === inst.destReg && i.value === inst.value);
+
+                        const dependenciesResolved = deps.every(dep => {
+                            const depInst = withoutCompletedInstructions.find(i => i.value === dep);
+                            return depInst && depInst.remainingLatency === 0;
+                        });
+
+                        console.log("DE2");
+                        console.log(superscalarOrderQueue);
+                        console.log(indexDe1Inst);
+                        console.log(indexDe2Inst);
+
+                        const canMove = (dependenciesResolved) &&
+                            !currentStages.includes('EXE') &&
+                            (!exInst || exInst?.remainingLatency === 0) &&
+                            (de1Inst?.resourceUnit !== inst.resourceUnit || indexDe2Inst < indexDe1Inst);
+                        
+                        if (canMove) {
+                            return {
+                                ...inst,
+                                stageSuperescalar: 'EXE' as const,
+                                remainingLatency: inst.remainingLatency - 1,
+                                dependencies: []
+                            };
+                        }
+
+                        return { ...inst, dependencies: deps };
+                    }
+
+                    // Handle IF stage
+                    if (inst.stageSuperescalar === 'IF') {
+                        const de1StageInst = withoutCompletedInstructions.filter(i => i.stageSuperescalar === 'DE1');
+                        const de2StageInst = withoutCompletedInstructions.filter(i => i.stageSuperescalar === 'DE2');
+                        const ifStageInsts = withoutCompletedInstructions.filter(i => i.stageSuperescalar === 'IF');
+
+                        const canAdvanceDe1 = (!de1StageInst.length || de1StageInst.every(i => i.dependencies?.length === 0)) && inst === ifStageInsts[0];
+                        const canAdvanceDe2 = (!de2StageInst.length || de2StageInst.every(i => i.dependencies?.length === 0)) && inst === ifStageInsts[1];
+
+                        if (canAdvanceDe1) {
+                            //console.log(inst);
+                            return {
+                                ...inst,
+                                stageSuperescalar: 'DE1' as const,
+                                dependencies: detectSuperescalarDependencies(inst, withoutCompletedInstructions)
+                            };
+                        } else if (canAdvanceDe2) {
+                            return {
+                                ...inst,
+                                stageSuperescalar: 'DE2' as const,
+                                dependencies: detectSuperescalarDependencies(inst, withoutCompletedInstructions)
+                            };
+                        }
+                    }
+
+                    processedInstructions.push(inst);
+                    return inst;
+                });
+
+                
+                //console.log("COMP INSTRU: " + completedInstructions.length)
+                //console.log(completedInstructions);
+                
+                /*
+                // Update first instruction completion status
+                if (completedInstructions.length > 0) {
+                    hasCompletedFirstInstruction.current = true;
+                }
+
+                
+                let bubbles = countBubbleCycle(withoutCompletedInstructions, stageOccupancy);
+                quantityCompletedInstructions.current += stageOccupancy.WB > 0 ? 1 : 0;
+                
+                // Update metrics
+                setMetrics(prev => ({
+                    totalCycles: cycleCount.current,
+                    completedInstructions: prev.completedInstructions + quantityCompletedInstructions.current,
+                    bubbleCycles: prev.bubbleCycles + bubbles,
+                    resourceUtilization: {
+                        IF: prev.resourceUtilization.IF + (stageOccupancy.IF > 0 ? 1 : 0),
+                        DE1: prev.resourceUtilization.DE1 + (stageOccupancy.DE1 > 0 ? 1 : 0),
+                        EXE: prev.resourceUtilization.EXE + (stageOccupancy.EXE > 0 ? 1 : 0),
+                        MEM: prev.resourceUtilization.MEM + (stageOccupancy.MEM > 0 ? 1 : 0),
+                        WB: prev.resourceUtilization.WB + (completedInstructions.length > 0 ? 1 : 0)
+                    }
+                }));
+                
+
+                bubbles = 0;
+                quantityCompletedInstructions.current = 0;
+                */
+
+                // Fetch new instructions if possible
+                const hasInstructionInIF = updatedInstructions.some(inst => inst.stageSuperescalar === 'IF');
+                if (!hasInstructionInIF && superscalarReadyQueue.length > 0) {
+                    const [nextInst1, ...remainingQueue] = superscalarReadyQueue;
+                    const instWithResource1 = assignResourceUnit(nextInst1);
+                    const newInst1: Instruction = {
+                        ...instWithResource1,
+                        stageSuperescalar: 'IF'
+                    };
+                    
+                    let newQueue: Instruction[] = [
+                        ...updatedInstructions,
+                        newInst1
+                    ];
+                    
+                    if (remainingQueue.length > 0) {
+                        const [nextInst2, ...updatedRemainingQueue] = remainingQueue;
+                        const instWithResource2 = assignResourceUnit(nextInst2);
+                        const newInst2: Instruction = {
+                            ...instWithResource2,
+                            stageSuperescalar: 'IF'
+                        };
+                        
+                        setSuperscalarReadyQueue(updatedRemainingQueue);
+                        
+                        newQueue = [
+                            ...newQueue,
+                            newInst2
+                        ];
+                    } else {
+                        setSuperscalarReadyQueue(remainingQueue);
+                    }
+                    
+                    return newQueue;
+                }
+
+                return updatedInstructions;
+            });
+        } else if (multiThreadingType === 'BMT'){ 
+            superScalarWithBMT();
+        } else { // SMT superescalar
+            superScalarWithSMT();
         }
     };
 
-    const superScalarWithoutMultithreading = () => {
-         // Lógica para o pipeline superscalar
-         let currentInstructions: Instruction[] = [];
-            
-         // Definindo as instruções e seus estados para cada ciclo
-         const instructionsCycle1 = [
-             {
-                 value: "1",
-                 type: "RR",
-                 color: "#302a2a",
-                 cycle: 0,
-                 resourceUnit: "Ciclo" as const,
-                 latency: 1,
-                 stage: "EXE" as const,
-                 sourceReg1: { number: 0, value: 0 },
-                 sourceReg2: { number: 0, value: 0 },
-                 destReg: { number: 0, value: 0 },
-                 remainingLatency: 1
-             },
-             {
-                 value: "ADD",
-                 type: "RR",
-                 color: "#4f793b",
-                 cycle: 0,
-                 resourceUnit: "ALU1" as const,
-                 latency: 1,
-                 stage: "EXE" as const,
-                 sourceReg1: { number: 2, value: 0 },
-                 sourceReg2: { number: 3, value: 0 },
-                 destReg: { number: 1, value: 0 },
-                 remainingLatency: 1
-             },
-             {
-                 value: "ADD",
-                 type: "RR",
-                 color: "#616ea5",
-                 cycle: 0,
-                 resourceUnit: "ALU2" as const,
-                 latency: 1,
-                 stage: "EXE" as const,
-                 sourceReg1: { number: 4, value: 0 },
-                 sourceReg2: { number: 6, value: 0 },
-                 destReg: { number: 11, value: 0 },
-                 remainingLatency: 1
-             },
-             {
-               value: "MUL",
-               type: "RI",
-               color: "#286aa8",
-               cycle: 0,
-               resourceUnit: "MUL" as const,
-               latency: 1,
-               stage: "EXE" as const,
-               sourceReg1: { number: 4, value: 0 },
-               sourceReg2: { number: 8, value: 0 },
-               destReg: { number: 7, value: 0 },
-               remainingLatency: 1
-             },
-             {
-               value: "LW",
-               type: "RM",
-               color: "#44536e",
-               cycle: 0,
-               resourceUnit: "LSU" as const,
-               latency: 1,
-               stage: "EXE" as const,
-               sourceReg1: { number: 20, value: 0 },
-               sourceReg2: { number: 5, value: 0 },
-               destReg: { number: 10, value: 0 },
-               remainingLatency: 1
-             }
-         ];
+    const detectSuperescalarDependencies = (newInst: Instruction, activeInstructions: Instruction[]): string[] => {
+        if (["ADD, SUB"].includes(newInst.value)) newInst.type = "RR";
+        else if (["MUL", "DIV"].includes(newInst.value)) newInst.type = "RI";
+        else if (["LW", "SW"].includes(newInst.value)) newInst.type = "RM";
+        else newInst.type = "B";
+    
+        const dependencies: string[] = [];
 
-         const instructionsCycle2 = [
-             {
-                 value: "2",
-                 type: "RR",
-                 color: "#302a2a",
-                 cycle: 0,
-                 resourceUnit: "Ciclo" as const,
-                 latency: 1,
-                 stage: "EXE" as const,
-                 sourceReg1: { number: 0, value: 0 },
-                 sourceReg2: { number: 0, value: 0 },
-                 destReg: { number: 0, value: 0 },
-                 remainingLatency: 1
-             },
-             {
-                 value: "ADD",
-                 type: "RR",
-                 color: "#af6533",
-                 cycle: 0,
-                 resourceUnit: "ALU1" as const,
-                 latency: 1,
-                 stage: "EXE" as const,
-                 sourceReg1: { number: 1, value: 0 },
-                 sourceReg2: { number: 6, value: 0 },
-                 destReg: { number: 5, value: 0 },
-                 remainingLatency: 1
-             },
-             {
-                value: "",
-                type: "RR",
-                color: "#444444",
-                cycle: 0,
-                resourceUnit: "ALU2" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 24, value: 0 },
-                sourceReg2: { number: 25, value: 0 },
-                destReg: { number: 26, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                 value: "MUL",
-                 type: "RI",
-                 color: "#286aa8",
-                 cycle: 0,
-                 resourceUnit: "MUL" as const,
-                 latency: 1,
-                 stage: "EXE" as const,
-                 sourceReg1: { number: 4, value: 0 },
-                 sourceReg2: { number: 8, value: 0 },
-                 destReg: { number: 7, value: 0 },
-                 remainingLatency: 1
-            },
-            {
-                 value: "LW",
-                 type: "RM",
-                 color: "#44536e",
-                 cycle: 0,
-                 resourceUnit: "LSU" as const,
-                 latency: 1,
-                 stage: "EXE" as const,
-                 sourceReg1: { number: 12, value: 0 },
-                 sourceReg2: { number: 5, value: 0 },
-                 destReg: { number: 10, value: 0 },
-                 remainingLatency: 1
+        for (const activeInst of activeInstructions) {
+            if (activeInst === newInst) break;
+        
+            if (!activeInst.destReg) continue;
+
+            const hasSourceReg1Dependency = newInst.sourceReg1 && 
+                newInst.sourceReg1.number === activeInst.destReg.number;
+            const hasSourceReg2Dependency = newInst.sourceReg2 && 
+                newInst.sourceReg2.number === activeInst.destReg.number;
+        
+            const hasToWait = activeInst.remainingLatency > 1;
+
+            // Only add as dependency if not forwardable
+            if (hasToWait) { // has to wait instructions despached before to finish
+                dependencies.push(activeInst.value); 
             }
-         ];
-
-         const instructionsCycle3 = [
-             {
-                 value: "3",
-                 type: "RR",
-                 color: "#302a2a",
-                 cycle: 0,
-                 resourceUnit: "Ciclo" as const,
-                 latency: 1,
-                 stage: "EXE" as const,
-                 sourceReg1: { number: 0, value: 0 },
-                 sourceReg2: { number: 0, value: 0 },
-                 destReg: { number: 0, value: 0 },
-                 remainingLatency: 1
-             },
-             {
-                 value: "ADD",
-                 type: "RR",
-                 color: "#972a8e",
-                 cycle: 0,
-                 resourceUnit: "ALU1" as const,
-                 latency: 1,
-                 stage: "EXE" as const,
-                 sourceReg1: { number: 4, value: 0 },
-                 sourceReg2: { number: 10, value: 0 },
-                 destReg: { number: 9, value: 0 },
-                 remainingLatency: 1
-             },
-             {
-                 value: "ADD",
-                 type: "RR",
-                 color: "#503b2d",
-                 cycle: 0,
-                 resourceUnit: "ALU2" as const,
-                 latency: 1,
-                 stage: "EXE" as const,
-                 sourceReg1: { number: 7, value: 0 },
-                 sourceReg2: { number: 3, value: 0 },
-                 destReg: { number: 2, value: 0 },
-                 remainingLatency: 1
-             },
-             {
-                value: "",
-                type: "RR",
-                color: "#444444",
-                cycle: 0,
-                resourceUnit: "MUL" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 24, value: 0 },
-                sourceReg2: { number: 25, value: 0 },
-                destReg: { number: 26, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "",
-                type: "RR",
-                color: "#444444",
-                cycle: 0,
-                resourceUnit: "LSU" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 24, value: 0 },
-                sourceReg2: { number: 25, value: 0 },
-                destReg: { number: 26, value: 0 },
-                remainingLatency: 1
-            }
-         ];
-
-         // Seleciona as instruções com base no ciclo atual
-         switch (cycleCount.current) {
-             case 1:
-                 currentInstructions = instructionsCycle1;
-                 break;
-             case 2:
-                 currentInstructions = instructionsCycle2;
-                 break;
-             case 3:
-                 currentInstructions = instructionsCycle3;
-                 break;
-             case 4:
-                 currentInstructions = instructionsCycle3;
-                 break;
-             default:
-                 return;
-         }
-
-         setSuperscalarInstructions(prev => {
-            // Adiciona as instruções do ciclo atual ao pipeline
-            return [...prev, ...currentInstructions];
-        });
-
-        // Obter os valores das instruções que estão atualmente no pipeline
-        const instructionsInPipeline = currentInstructions.map(inst => inst.value);
-
-        // Remover as instruções que estão no pipeline da fila de pronto
-        setSuperscalarReadyQueue(prevQueue => 
-            prevQueue.filter(inst => !instructionsInPipeline.includes(inst.value))
-        );
-
-        setTotalInstructions(7);
-
-         // Atualiza as métricas
-         if (cycleCount.current !== 4) {
-             setMetrics(prevMetrics => ({
-                 ...prevMetrics,
-                 totalCycles: prevMetrics.totalCycles + 1,
-                 completedInstructions: totalInstructions,
-                 bubbleCycles: 0 // Incrementa bubbles se não for o primeiro ciclo
-             }));
-         }
-         // Limpa o layout após o terceiro ciclo
-         if (cycleCount.current === 4) {
-             clearInstructions(); // Limpa as instruções do layout
-             cycleCount.current = 0; // Reseta o contador de ciclos
-             return; // Para a contagem de ciclos
-         }
-    }
-
-    const superScalarWithIMT = () => {
-        // Lógica para o pipeline superscalar
-        let currentInstructions: Instruction[] = [];
-            
-        // Definindo as instruções e seus estados para cada ciclo
-        const instructionsCycle1 = [
-            {
-                value: "1",
-                type: "RR",
-                color: "#302a2a",
-                cycle: 0,
-                resourceUnit: "Ciclo" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 0, value: 0 },
-                sourceReg2: { number: 0, value: 0 },
-                destReg: { number: 0, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "ADD",
-                type: "RR",
-                color: "#880d0d",
-                cycle: 0,
-                resourceUnit: "ALU1" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 2, value: 0 },
-                sourceReg2: { number: 3, value: 0 },
-                destReg: { number: 1, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "ADD",
-                type: "RR",
-                color: "#880d0d",
-                cycle: 0,
-                resourceUnit: "ALU2" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 4, value: 0 },
-                sourceReg2: { number: 6, value: 0 },
-                destReg: { number: 11, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "",
-                type: "RR",
-                color: "#444444",
-                cycle: 0,
-                resourceUnit: "MUL" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 24, value: 0 },
-                sourceReg2: { number: 25, value: 0 },
-                destReg: { number: 26, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "",
-                type: "RR",
-                color: "#444444",
-                cycle: 0,
-                resourceUnit: "LSU" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 24, value: 0 },
-                sourceReg2: { number: 25, value: 0 },
-                destReg: { number: 26, value: 0 },
-                remainingLatency: 1
-            },
-        ];
-
-        const instructionsCycle2 = [
-            {
-                value: "2",
-                type: "RR",
-                color: "#302a2a",
-                cycle: 0,
-                resourceUnit: "Ciclo" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 0, value: 0 },
-                sourceReg2: { number: 0, value: 0 },
-                destReg: { number: 0, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "",
-                type: "RR",
-                color: "#444444",
-                cycle: 0,
-                resourceUnit: "ALU1" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 24, value: 0 },
-                sourceReg2: { number: 25, value: 0 },
-                destReg: { number: 26, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "",
-                type: "RR",
-                color: "#444444",
-                cycle: 0,
-                resourceUnit: "ALU2" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 24, value: 0 },
-                sourceReg2: { number: 25, value: 0 },
-                destReg: { number: 26, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "MUL",
-                type: "RI",
-                color: "#11114e",
-                cycle: 0,
-                resourceUnit: "MUL" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 4, value: 0 },
-                sourceReg2: { number: 8, value: 0 },
-                destReg: { number: 7, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "LW",
-                type: "RM",
-                color: "#11114e",
-                cycle: 0,
-                resourceUnit: "LSU" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 12, value: 0 },
-                sourceReg2: { number: 5, value: 0 },
-                destReg: { number: 10, value: 0 },
-                remainingLatency: 1
-            }
-        ];
-
-        const instructionsCycle3 = [
-            {
-                value: "3",
-                type: "RR",
-                color: "#302a2a",
-                cycle: 0,
-                resourceUnit: "Ciclo" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 0, value: 0 },
-                sourceReg2: { number: 0, value: 0 },
-                destReg: { number: 0, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "ADD",
-                type: "RR",
-                color: "#880d0d",
-                cycle: 0,
-                resourceUnit: "ALU1" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 1, value: 0 },
-                sourceReg2: { number: 6, value: 0 },
-                destReg: { number: 5, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "",
-                type: "RR",
-                color: "#444444",
-                cycle: 0,
-                resourceUnit: "ALU2" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 24, value: 0 },
-                sourceReg2: { number: 25, value: 0 },
-                destReg: { number: 26, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "",
-                type: "RR",
-                color: "#444444",
-                cycle: 0,
-                resourceUnit: "MUL" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 24, value: 0 },
-                sourceReg2: { number: 25, value: 0 },
-                destReg: { number: 26, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "",
-                type: "RR",
-                color: "#444444",
-                cycle: 0,
-                resourceUnit: "LSU" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 24, value: 0 },
-                sourceReg2: { number: 25, value: 0 },
-                destReg: { number: 26, value: 0 },
-                remainingLatency: 1
-            },
-        ];
-
-        const instructionsCycle4 = [
-            {
-                value: "4",
-                type: "RR",
-                color: "#302a2a",
-                cycle: 0,
-                resourceUnit: "Ciclo" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 0, value: 0 },
-                sourceReg2: { number: 0, value: 0 },
-                destReg: { number: 0, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "",
-                type: "RR",
-                color: "#444444",
-                cycle: 0,
-                resourceUnit: "ALU1" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 24, value: 0 },
-                sourceReg2: { number: 25, value: 0 },
-                destReg: { number: 26, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "",
-                type: "RR",
-                color: "#444444",
-                cycle: 0,
-                resourceUnit: "ALU2" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 24, value: 0 },
-                sourceReg2: { number: 25, value: 0 },
-                destReg: { number: 26, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "MUL",
-                type: "RI",
-                color: "#11114e",
-                cycle: 0,
-                resourceUnit: "MUL" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 4, value: 0 },
-                sourceReg2: { number: 8, value: 0 },
-                destReg: { number: 7, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "LW",
-                type: "RM",
-                color: "#11114e",
-                cycle: 0,
-                resourceUnit: "LSU" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 12, value: 0 },
-                sourceReg2: { number: 5, value: 0 },
-                destReg: { number: 10, value: 0 },
-                remainingLatency: 1
-            }
-        ];
-
-        const instructionsCycle5 = [
-            {
-                value: "5",
-                type: "RR",
-                color: "#302a2a",
-                cycle: 0,
-                resourceUnit: "Ciclo" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 0, value: 0 },
-                sourceReg2: { number: 0, value: 0 },
-                destReg: { number: 0, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "",
-                type: "RR",
-                color: "#444444",
-                cycle: 0,
-                resourceUnit: "ALU1" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 24, value: 0 },
-                sourceReg2: { number: 25, value: 0 },
-                destReg: { number: 26, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "ADD",
-                type: "RR",
-                color: "#880d0d",
-                cycle: 0,
-                resourceUnit: "ALU2" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 7, value: 0 },
-                sourceReg2: { number: 3, value: 0 },
-                destReg: { number: 2, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "",
-                type: "RR",
-                color: "#444444",
-                cycle: 0,
-                resourceUnit: "MUL" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 24, value: 0 },
-                sourceReg2: { number: 25, value: 0 },
-                destReg: { number: 26, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "",
-                type: "RR",
-                color: "#444444",
-                cycle: 0,
-                resourceUnit: "LSU" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 24, value: 0 },
-                sourceReg2: { number: 25, value: 0 },
-                destReg: { number: 26, value: 0 },
-                remainingLatency: 1
-            },
-        ];
-
-        const instructionsCycle6 = [
-            {
-                value: "6",
-                type: "RR",
-                color: "#302a2a",
-                cycle: 0,
-                resourceUnit: "Ciclo" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 0, value: 0 },
-                sourceReg2: { number: 0, value: 0 },
-                destReg: { number: 0, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "ADD",
-                type: "RR",
-                color: "#11114e",
-                cycle: 0,
-                resourceUnit: "ALU1" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 4, value: 0 },
-                sourceReg2: { number: 10, value: 0 },
-                destReg: { number: 9, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "",
-                type: "RR",
-                color: "#444444",
-                cycle: 0,
-                resourceUnit: "ALU2" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 24, value: 0 },
-                sourceReg2: { number: 25, value: 0 },
-                destReg: { number: 26, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "",
-                type: "RR",
-                color: "#444444",
-                cycle: 0,
-                resourceUnit: "MUL" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 24, value: 0 },
-                sourceReg2: { number: 25, value: 0 },
-                destReg: { number: 26, value: 0 },
-                remainingLatency: 1
-            },
-            {
-                value: "",
-                type: "RR",
-                color: "#444444",
-                cycle: 0,
-                resourceUnit: "LSU" as const,
-                latency: 1,
-                stage: "EXE" as const,
-                sourceReg1: { number: 24, value: 0 },
-                sourceReg2: { number: 25, value: 0 },
-                destReg: { number: 26, value: 0 },
-                remainingLatency: 1
-            },
-        ]
-
-        // Seleciona as instruções com base no ciclo atual
-        switch (cycleCount.current) {
-            case 1:
-                currentInstructions = instructionsCycle1;
-                break;
-            case 2:
-                currentInstructions = instructionsCycle2;
-                break;
-            case 3:
-                currentInstructions = instructionsCycle3;
-                break;
-            case 4:
-                currentInstructions = instructionsCycle4;
-                break;
-            case 5:
-                currentInstructions = instructionsCycle5;
-                break;
-            case 6:
-                currentInstructions = instructionsCycle6;
-                break;
-            case 7:
-                break;
-            default:
-                return;
-        }
-
-        setSuperscalarInstructions(prev => {
-            // Adiciona as instruções do ciclo atual ao pipeline
-            return [...prev, ...currentInstructions];
-        });
-
-        // Obter os valores das instruções que estão atualmente no pipeline
-        const instructionsInPipeline = currentInstructions.map(inst => inst.value);
-
-        // Remover as instruções que estão no pipeline da fila de pronto
-        setSuperscalarReadyQueue(prevQueue => 
-            prevQueue.filter(inst => !instructionsInPipeline.includes(inst.value))
-        );
-
-        setTotalInstructions(7);
-
-        // Atualiza as métricas
-        if (cycleCount.current !== 7) {
-            setMetrics(prevMetrics => ({
-                ...prevMetrics,
-                totalCycles: prevMetrics.totalCycles + 1,
-                completedInstructions: totalInstructions,
-                bubbleCycles: 0 // Incrementa bubbles se não for o primeiro ciclo
-            }));
-        }
-        // Limpa o layout após o sétimo ciclo
-        if (cycleCount.current === 7) {
-            clearInstructions(); // Limpa as instruções do layout
-            cycleCount.current = 0; // Reseta o contador de ciclos
-            return; // Para a contagem de ciclos
-        }
-    }
-
+        }        
+        
+        return dependencies;
+    };
+    
     const superScalarWithBMT = () => {
         // Lógica para o pipeline superscalar
         let currentInstructions: Instruction[] = [];
@@ -1171,6 +679,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "Ciclo" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 0, value: 0 },
                 sourceReg2: { number: 0, value: 0 },
                 destReg: { number: 0, value: 0 },
@@ -1184,6 +693,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "ALU1" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 2, value: 0 },
                 sourceReg2: { number: 3, value: 0 },
                 destReg: { number: 1, value: 0 },
@@ -1197,6 +707,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "ALU2" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 4, value: 0 },
                 sourceReg2: { number: 6, value: 0 },
                 destReg: { number: 11, value: 0 },
@@ -1210,6 +721,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "MUL" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 24, value: 0 },
                 sourceReg2: { number: 25, value: 0 },
                 destReg: { number: 26, value: 0 },
@@ -1223,6 +735,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "LSU" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 24, value: 0 },
                 sourceReg2: { number: 25, value: 0 },
                 destReg: { number: 26, value: 0 },
@@ -1239,6 +752,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "Ciclo" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 0, value: 0 },
                 sourceReg2: { number: 0, value: 0 },
                 destReg: { number: 0, value: 0 },
@@ -1252,6 +766,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "ALU1" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 24, value: 0 },
                 sourceReg2: { number: 25, value: 0 },
                 destReg: { number: 26, value: 0 },
@@ -1265,6 +780,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "ALU2" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 24, value: 0 },
                 sourceReg2: { number: 25, value: 0 },
                 destReg: { number: 26, value: 0 },
@@ -1278,6 +794,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "MUL" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 4, value: 0 },
                 sourceReg2: { number: 8, value: 0 },
                 destReg: { number: 7, value: 0 },
@@ -1291,6 +808,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "LSU" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 12, value: 0 },
                 sourceReg2: { number: 5, value: 0 },
                 destReg: { number: 10, value: 0 },
@@ -1307,6 +825,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "Ciclo" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 0, value: 0 },
                 sourceReg2: { number: 0, value: 0 },
                 destReg: { number: 0, value: 0 },
@@ -1320,6 +839,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "ALU1" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 24, value: 0 },
                 sourceReg2: { number: 25, value: 0 },
                 destReg: { number: 26, value: 0 },
@@ -1333,6 +853,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "ALU2" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 24, value: 0 },
                 sourceReg2: { number: 25, value: 0 },
                 destReg: { number: 26, value: 0 },
@@ -1346,6 +867,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "MUL" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 4, value: 0 },
                 sourceReg2: { number: 8, value: 0 },
                 destReg: { number: 7, value: 0 },
@@ -1359,6 +881,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "LSU" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 12, value: 0 },
                 sourceReg2: { number: 5, value: 0 },
                 destReg: { number: 10, value: 0 },
@@ -1375,6 +898,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "Ciclo" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 0, value: 0 },
                 sourceReg2: { number: 0, value: 0 },
                 destReg: { number: 0, value: 0 },
@@ -1388,6 +912,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "ALU1" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 1, value: 0 },
                 sourceReg2: { number: 6, value: 0 },
                 destReg: { number: 5, value: 0 },
@@ -1401,6 +926,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "ALU2" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 7, value: 0 },
                 sourceReg2: { number: 3, value: 0 },
                 destReg: { number: 2, value: 0 },
@@ -1414,6 +940,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "MUL" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 24, value: 0 },
                 sourceReg2: { number: 25, value: 0 },
                 destReg: { number: 26, value: 0 },
@@ -1427,6 +954,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "LSU" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 24, value: 0 },
                 sourceReg2: { number: 25, value: 0 },
                 destReg: { number: 26, value: 0 },
@@ -1443,6 +971,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "Ciclo" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 0, value: 0 },
                 sourceReg2: { number: 0, value: 0 },
                 destReg: { number: 0, value: 0 },
@@ -1456,6 +985,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "ALU1" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 4, value: 0 },
                 sourceReg2: { number: 10, value: 0 },
                 destReg: { number: 9, value: 0 },
@@ -1469,6 +999,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "ALU2" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 24, value: 0 },
                 sourceReg2: { number: 25, value: 0 },
                 destReg: { number: 26, value: 0 },
@@ -1482,6 +1013,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "MUL" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 24, value: 0 },
                 sourceReg2: { number: 25, value: 0 },
                 destReg: { number: 26, value: 0 },
@@ -1495,6 +1027,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "LSU" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 24, value: 0 },
                 sourceReg2: { number: 25, value: 0 },
                 destReg: { number: 26, value: 0 },
@@ -1572,6 +1105,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "Ciclo" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 0, value: 0 },
                 sourceReg2: { number: 0, value: 0 },
                 destReg: { number: 0, value: 0 },
@@ -1585,6 +1119,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "ALU1" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 2, value: 0 },
                 sourceReg2: { number: 3, value: 0 },
                 destReg: { number: 1, value: 0 },
@@ -1598,6 +1133,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "ALU2" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 4, value: 0 },
                 sourceReg2: { number: 6, value: 0 },
                 destReg: { number: 11, value: 0 },
@@ -1611,6 +1147,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "LSU" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 20, value: 0 },
                 sourceReg2: { number: 5, value: 0 },
                 destReg: { number: 10, value: 0 },
@@ -1624,6 +1161,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "MUL" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 4, value: 0 },
                 sourceReg2: { number: 8, value: 0 },
                 destReg: { number: 7, value: 0 },
@@ -1640,6 +1178,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "Ciclo" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 0, value: 0 },
                 sourceReg2: { number: 0, value: 0 },
                 destReg: { number: 0, value: 0 },
@@ -1653,6 +1192,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "ALU1" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 1, value: 0 },
                 sourceReg2: { number: 6, value: 0 },
                 destReg: { number: 5, value: 0 },
@@ -1666,6 +1206,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "ALU2" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 24, value: 0 },
                 sourceReg2: { number: 25, value: 0 },
                 destReg: { number: 26, value: 0 },
@@ -1679,6 +1220,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "LSU" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 20, value: 0 },
                 sourceReg2: { number: 5, value: 0 },
                 destReg: { number: 10, value: 0 },
@@ -1692,6 +1234,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "MUL" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 4, value: 0 },
                 sourceReg2: { number: 8, value: 0 },
                 destReg: { number: 7, value: 0 },
@@ -1708,6 +1251,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "Ciclo" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 0, value: 0 },
                 sourceReg2: { number: 0, value: 0 },
                 destReg: { number: 0, value: 0 },
@@ -1721,6 +1265,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "ALU1" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 4, value: 0 },
                 sourceReg2: { number: 10, value: 0 },
                 destReg: { number: 9, value: 0 },
@@ -1734,6 +1279,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "ALU2" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 7, value: 0 },
                 sourceReg2: { number: 3, value: 0 },
                 destReg: { number: 2, value: 0 },
@@ -1747,6 +1293,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "MUL" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 24, value: 0 },
                 sourceReg2: { number: 25, value: 0 },
                 destReg: { number: 26, value: 0 },
@@ -1760,6 +1307,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 resourceUnit: "LSU" as const,
                 latency: 1,
                 stage: "EXE" as const,
+                stageSuperescalar: "IF" as const,
                 sourceReg1: { number: 24, value: 0 },
                 sourceReg2: { number: 25, value: 0 },
                 destReg: { number: 26, value: 0 },

@@ -42,23 +42,17 @@ export function assignResourceUnit(instruction: Instruction): Instruction {
             return { 
                 ...instruction, 
                 resourceUnit: 'MUL',
-                latency: 1,
-                remainingLatency: 1 
             };
         case 'LW':
         case 'SW':
             return { 
                 ...instruction, 
                 resourceUnit: 'LSU',
-                latency: 1,
-                remainingLatency: 1 
             };
         default:
             return { 
                 ...instruction, 
-                resourceUnit: Math.random() < 0.5 ? 'ALU1' : 'ALU2',
-                latency: 1,
-                remainingLatency: 1 
+                resourceUnit: 'ALU',
             };
     }
 }
