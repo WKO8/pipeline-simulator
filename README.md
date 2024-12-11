@@ -44,6 +44,11 @@ A RISC-V pipeline simulator that supports scalar and superscalar architectures w
 4. MEM (Memory)
 5. WB (Write Back)
 
+## Instalation
+1. git clone 
+2. npm i
+3. npm run dev
+
 ## Usage
 
 ### Running the Simulator
