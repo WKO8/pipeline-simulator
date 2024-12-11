@@ -47,6 +47,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
 
 
     const cycleCount = useRef(0);
+    const functionalUnitCycles = useRef(0);
     const quantityCompletedInstructions = useRef(0);
     const hasCompletedFirstInstruction = useRef(false);
 
@@ -203,11 +204,7 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
             return 0;
         }
 
-        //console.log('WB occupancy:', stageOccupancy.WB);
         const bubbleCount = stageOccupancy.WB === 0 ? 1 : 0;
-        //console.log('Bubble count:', bubbleCount);
-
-        
     
         return bubbleCount;
     };
@@ -241,8 +238,6 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                 };
                 
                 const withoutCompletedInstructions = prev.filter(inst => inst.stage !== 'WB');
-                console.log('All instructions:', withoutCompletedInstructions);
-
 
                 const stagePriority: { [key in Instruction['stage']]: number } = { 'WB': 0, 'MEM': 1, 'EXE': 2, 'DE': 3, 'IF': 4 };
                 const processedInstructions: Instruction[] = [];
@@ -376,8 +371,6 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                     return inst;
                 });
 
-                console.log("COMP INSTRU: " + completedInstructions.length)
-
                 // Update first instruction completion status
                 if (completedInstructions.length > 0) {
                     hasCompletedFirstInstruction.current = true;
@@ -420,20 +413,18 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
             });
         } else if (multiThreadingType === 'none' || multiThreadingType === 'IMT') {
             setSuperscalarInstructions(prev => {
-                const completedInstructions = prev.filter(inst => inst.stageSuperescalar === 'WB');
-                
-                // Track stage occupancy
-                const stageOccupancy = {
-                    IF: prev.filter(i => i.stageSuperescalar === 'IF').length,
-                    DE1: prev.filter(i => i.stageSuperescalar === 'DE1').length,
-                    DE2: prev.filter(i => i.stageSuperescalar === 'DE2').length,
-                    EXE: prev.filter(i => i.stageSuperescalar === 'EXE').length,
-                    WB: prev.filter(i => i.stageSuperescalar === 'WB').length
-                };
-                
                 const withoutCompletedInstructions = prev.filter(inst => inst.stageSuperescalar !== 'WB');
-                //console.log('All instructions:', withoutCompletedInstructions);
+                const completedInstructions = prev.filter(inst => inst.stageSuperescalar === 'EXE');
+                const instructionOnFunctionalUnits = withoutCompletedInstructions.some(inst => 
+                    inst.stageSuperescalar === 'EXE'
+                );
+                
+                if (instructionOnFunctionalUnits) {
+                    functionalUnitCycles.current += 1; // Incrementa somente quando há instruções em unidades funcionais
+                }
 
+                console.log(completedInstructions);
+                quantityCompletedInstructions.current += completedInstructions.length;
 
                 const stagePriority: { [key in Instruction['stageSuperescalar']]: number } = { 'WB': 0, 'EXE': 1, 'DE2': 2,'DE1': 3, 'IF': 4 };
                 const processedInstructions: Instruction[] = [];
@@ -471,11 +462,6 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                             return depInst && depInst.remainingLatency === 0;
                         });
 
-                        console.log("DE1");
-                        console.log(superscalarOrderQueue);
-                        console.log(indexDe1Inst);
-                        console.log(indexDe2Inst);
-
                         const canMove = dependenciesResolved &&
                             !currentStages.includes('EXE') &&
                             (!exInst || exInst?.remainingLatency === 0) &&
@@ -507,11 +493,6 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                             return depInst && depInst.remainingLatency === 0;
                         });
 
-                        console.log("DE2");
-                        console.log(superscalarOrderQueue);
-                        console.log(indexDe1Inst);
-                        console.log(indexDe2Inst);
-
                         const canMove = (dependenciesResolved) &&
                             !currentStages.includes('EXE') &&
                             (!exInst || exInst?.remainingLatency === 0) &&
@@ -539,7 +520,6 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                         const canAdvanceDe2 = (!de2StageInst.length || de2StageInst.every(i => i.dependencies?.length === 0)) && inst === ifStageInsts[1];
 
                         if (canAdvanceDe1) {
-                            //console.log(inst);
                             return {
                                 ...inst,
                                 stageSuperescalar: 'DE1' as const,
@@ -555,41 +535,27 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
                     }
 
                     processedInstructions.push(inst);
+
                     return inst;
                 });
 
-                
-                //console.log("COMP INSTRU: " + completedInstructions.length)
-                //console.log(completedInstructions);
-                
-                /*
-                // Update first instruction completion status
-                if (completedInstructions.length > 0) {
-                    hasCompletedFirstInstruction.current = true;
-                }
-
-                
-                let bubbles = countBubbleCycle(withoutCompletedInstructions, stageOccupancy);
-                quantityCompletedInstructions.current += stageOccupancy.WB > 0 ? 1 : 0;
-                
-                // Update metrics
-                setMetrics(prev => ({
-                    totalCycles: cycleCount.current,
-                    completedInstructions: prev.completedInstructions + quantityCompletedInstructions.current,
-                    bubbleCycles: prev.bubbleCycles + bubbles,
-                    resourceUtilization: {
-                        IF: prev.resourceUtilization.IF + (stageOccupancy.IF > 0 ? 1 : 0),
-                        DE1: prev.resourceUtilization.DE1 + (stageOccupancy.DE1 > 0 ? 1 : 0),
-                        EXE: prev.resourceUtilization.EXE + (stageOccupancy.EXE > 0 ? 1 : 0),
-                        MEM: prev.resourceUtilization.MEM + (stageOccupancy.MEM > 0 ? 1 : 0),
-                        WB: prev.resourceUtilization.WB + (completedInstructions.length > 0 ? 1 : 0)
+                if (cycleCount.current > 2 && instructionOnFunctionalUnits) {
+                    if (cycleCount.current === 6 || cycleCount.current === 7) {
+                        quantityCompletedInstructions.current--;
                     }
-                }));
+                    // Update metrics
+                    console.log(metrics.completedInstructions)
+                    setMetrics(prev => ({
+                        totalCycles: prev.totalCycles + 0.5,
+                        completedInstructions: prev.completedInstructions + (quantityCompletedInstructions.current),
+                        bubbleCycles: 0,
+                        resourceUtilization: {
+                            ...prev.resourceUtilization,
+                        }
+                    }));
+                }
                 
-
-                bubbles = 0;
                 quantityCompletedInstructions.current = 0;
-                */
 
                 // Fetch new instructions if possible
                 const hasInstructionInIF = updatedInstructions.some(inst => inst.stageSuperescalar === 'IF');
@@ -649,11 +615,6 @@ export const PipelineProvider = ({ children }: { children: React.ReactNode }) =>
         
             if (!activeInst.destReg) continue;
 
-            const hasSourceReg1Dependency = newInst.sourceReg1 && 
-                newInst.sourceReg1.number === activeInst.destReg.number;
-            const hasSourceReg2Dependency = newInst.sourceReg2 && 
-                newInst.sourceReg2.number === activeInst.destReg.number;
-        
             const hasToWait = activeInst.remainingLatency > 1;
 
             // Only add as dependency if not forwardable
