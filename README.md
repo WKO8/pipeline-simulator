@@ -45,15 +45,12 @@ A RISC-V pipeline simulator that supports scalar and superscalar architectures w
 5. WB (Write Back)
 
 ## Instalation
-1. 
 ```bash
 git clone https://github.com/WKO8/pipeline-simulator
 ```
-2. 
 ```bash
 npm i
 ```
-3. 
 ```bash
 npm run dev
 ```
